@@ -1,5 +1,6 @@
+from typing import Generic, TypeVar, Callable, Any
 import struct
-from typing import Generic, TypeVar
+import os
 
 # Type for Generic class
 T = TypeVar('T')
@@ -42,13 +43,30 @@ class DataWrite(Generic[T]):
     Data Write Query Representation.
 
     Example of use: DataWrite[str](...)
+
+    :var table: table name
+    :var column: column names
+    :var query_type: query type, enum 'insert' or 'update'
+    :var new_value_func: function to generate new value for Update query
+    :var conditions: condition for Update query
     """
 
-    def __init__(self, tables: list[str], column: list[str], conditions: list[Condition], new_value: list[T] | None):
-        self.tables: list[str] = tables
-        self.column: list[str] = column
-        self.conditions: list[Condition] = conditions
-        self.new_value: list[T] | None = new_value
+    def __init__(self, table: str,
+                 column: list[str],
+                 query_type: str,
+                 new_value_func: Callable[[..., Any], T] = None,
+                 new_value: list[T] = None,
+                 conditions: list[Condition] | None = None):
+        self.table: str = table                                                 # table name
+        self.column: list[str] = column                                         # column names
+        self.query_type: str = query_type                                       # query type, enum 'insert' or 'update'
+        self.new_value_func: Callable[[..., Any], T] | None = new_value_func    # function to generate new value for Update query
+        self.new_value: list[T] | None = new_value                              # tuples of value for insert query
+        self.conditions: list[Condition] | None = conditions                    # condition for Update query
+
+        # check type enum
+        if self.query_type not in ['insert', 'update']:
+            raise ValueError(f"Unsupported query type: {self.query_type}")
 
 
 class Storage:
@@ -59,8 +77,32 @@ class Storage:
     def __init__(self):
         self.storage_path = './storage'
 
-    def write_block(self, data_write: DataWrite):
-        pass
+    def write_block(self, data_write: DataWrite) -> int:
+        """
+        Write data to storage
+        """
+        if data_write.query_type != 'insert':
+            raise ValueError(f"UPDATE BELUM DIBUAT")
+
+        # file path
+        table_file = os.path.join(self.storage_path, f"{data_write.table}.bin")
+
+        # Check file exists, if not, create empty file
+        if not os.path.exists(table_file):
+            with open(table_file, 'wb') as file:
+                pass  # create empty file
+
+        # Open the file to add data
+        with open(table_file, 'ab') as file:
+            total_bytes_written = 0
+
+            # Convert each new value to binary and write to file
+            for value in data_write.new_value:
+                binary_data = self.__convert_to_binary(value)
+                file.write(binary_data)
+                total_bytes_written += len(binary_data)
+
+        return total_bytes_written
 
     def read_block(self, data_retrieval: DataRetrieval):
         pass
@@ -68,19 +110,22 @@ class Storage:
     @staticmethod
     def __convert_to_binary(data: int | float | str) -> bytes:
         """
-        Convert data types (int, float, str) to binary representation.
+        Converts data types (int, float, str) to binary representation.
         """
         if isinstance(data, int):
-            # Integer
-            byte_length = (data.bit_length() + 7) // 8 or 1
-            return data.to_bytes(byte_length, byteorder='big', signed=True)
+            if data.bit_length() > 32:
+                raise ValueError("Integer value is too large to be stored in 32 bits.")
+
+            # Convert integer to binary (4 bytes for 32bit integer)
+            # using big endian byte order
+            return data.to_bytes(4, byteorder='big', signed=True)
 
         elif isinstance(data, float):
-            # Float
+            # Convert float to binary (double precision, 8 bytes)
             return struct.pack('>d', data)
 
         elif isinstance(data, str):
-            # String
+            # Convert string to binary (UTF-8 encoded)
             return data.encode('utf-8')
 
         else:
@@ -105,3 +150,21 @@ class Storage:
 
         else:
             raise ValueError(f"Unsupported data type: {data_type.__name__}")
+
+
+if __name__ == '__main__':
+    # Create a sample DataWrite object for 'insert' query
+    data_write = DataWrite(
+        table="employees",
+        column=["id", "name", "salary"],
+        query_type="insert",
+        new_value=[1, "John Doe", 50000]
+    )
+
+    # Create the storage manager
+    storage_manager = Storage()
+
+    # Write the data to the storage file
+    bytes_written = storage_manager.write_block(data_write)
+
+    print(f"Total bytes written: {bytes_written}")
