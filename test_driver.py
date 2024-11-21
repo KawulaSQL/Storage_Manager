@@ -1,9 +1,10 @@
 #!/usr/bin/python3
 
 import re
-from lib.storageManager import StorageManager
-from lib.schema import Schema
-from lib.attribute import Attribute
+from StorageManager import StorageManager
+from lib.Schema import Schema
+from lib.Attribute import Attribute
+
 
 class TestDriver:
     def __init__(self, base_path: str) -> None:

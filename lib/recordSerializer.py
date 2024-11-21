@@ -43,7 +43,7 @@ class DtypeEncoder:
         :param num: The float to encode.
         :return: The encoded float as bytes.
         """
-        int_rep = self.float_to_int(num)
+        int_rep = self.__float_to_int(num)
         return self.encodeInt(int_rep, 4, signed=True)
 
     def decodeFloat(self, byte_data: ByteString, offset: int) -> Tuple[float, int]:
@@ -55,7 +55,7 @@ class DtypeEncoder:
         :return: A tuple containing the decoded float and the new offset.
         """
         int_rep, new_offset = self.decodeInt(byte_data, offset, 4, signed=True)
-        return self.int_to_float(int_rep), new_offset
+        return self.__int_to_float(int_rep), new_offset
 
     def encodeChar(self, char: str, size: int = 1) -> bytes:
         """
@@ -108,7 +108,7 @@ class DtypeEncoder:
         value = byte_data[new_offset:new_offset + length].decode('utf-8')
         return value, new_offset + length
 
-    def float_to_int(self, num: float) -> int:
+    def __float_to_int(self, num: float) -> int:
         """
         Convert a float to its integer representation (IEEE 754 format).
 
@@ -118,7 +118,7 @@ class DtypeEncoder:
         import struct
         return struct.unpack('<I', struct.pack('<f', num))[0]
 
-    def int_to_float(self, int_rep: int) -> float:
+    def __int_to_float(self, int_rep: int) -> float:
         """
         Convert an integer (IEEE 754 format) to a float.
 
