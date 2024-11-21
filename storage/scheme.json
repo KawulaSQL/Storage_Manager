@@ -1,0 +1,30 @@
+{
+  "tables": {
+    "employees": {
+      "columns": {
+        "id": { "type": "integer", "constraints": ["primary key"] },
+        "name": { "type": "varchar", "size": 100 },
+        "position": { "type": "varchar", "size": 50 },
+        "salary": { "type": "float" },
+        "department_id": { "type": "integer", "constraints": ["foreign key", "references departments.id"] }
+      }
+    },
+    "departments": {
+      "columns": {
+        "id": { "type": "integer", "constraints": ["primary key"] },
+        "name": { "type": "varchar", "size": 100 },
+        "location": { "type": "varchar", "size": 100 },
+        "budget": { "type": "float" }
+      }
+    },
+    "projects": {
+      "columns": {
+        "id": { "type": "integer", "constraints": ["primary key"] },
+        "name": { "type": "varchar", "size": 100 },
+        "start_date": { "type": "char", "size": 10 },
+        "end_date": { "type": "char", "size": 10 },
+        "department_id": { "type": "integer", "constraints": ["foreign key", "references departments.id"] }
+      }
+    }
+  }
+}
