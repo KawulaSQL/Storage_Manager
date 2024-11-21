@@ -4,6 +4,7 @@ from typing import ByteString
 BLOCK_SIZE = 4096  # 4KB
 DATA_SIZE = BLOCK_SIZE - 12  # Data size excluding the header (12 bytes)
 
+
 class Block:
     """
     Represents a single block/page in the storage system.

@@ -1,8 +1,9 @@
 from typing import List, Tuple, Dict, Any
 
-from .tableFileManager import TableFileManager
-from .schema import Schema
-from .attribute import Attribute
+from lib.TableFileManager import TableFileManager
+from lib.Schema import Schema
+from lib.Attribute import Attribute
+
 
 class StorageManager:
     def __init__(self, base_path: str) -> None:
@@ -12,7 +13,7 @@ class StorageManager:
 
         :param base_path: Path where table files are stored.
         """
-        self.base_path : str = base_path
+        self.base_path: str = base_path
         TableFileManager.base_path = base_path
 
         self.information_schema: TableFileManager
@@ -76,24 +77,24 @@ class StorageManager:
         """
         table_data = self.get_table_data('information_schema')
         return [table[0] for table in table_data]
-    
-    def get_table_schema(self, table_name) :
+
+    def get_table_schema(self, table_name):
         """
         Retrieves the schema of a specified table.
 
         :return: Schema of the table requested.
         """
-        if (table_name not in self.tables) :
+        if table_name not in self.tables:
             raise ValueError(f"{table_name} not in database")
         return self.tables[table_name].schema
-    
-    def insert_into_table(self, table_name : str, values : List[Tuple[Any, ...]]) -> None:
+
+    def insert_into_table(self, table_name: str, values: List[Tuple[Any, ...]]) -> None:
         """
         Insert tuples of data into the specified table.
 
         :param table_name: Name of the table to insert to.
         :param values: Tuples of data to be inserted.
         """
-        if (table_name not in self.tables) :
+        if table_name not in self.tables:
             raise ValueError(f"{table_name} not in database")
         self.tables[table_name].write_table(values)

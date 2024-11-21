@@ -1,5 +1,6 @@
 from typing import List, Tuple, Any, ByteString
 
+
 class DtypeEncoder:
     """
     A utility class to encode and decode primitive data types into and from bytes.

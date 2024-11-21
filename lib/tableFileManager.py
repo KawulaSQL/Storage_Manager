@@ -1,9 +1,10 @@
 import os
 from typing import List, Tuple, Any
 
-from .recordSerializer import RecordSerializer
-from .block import Block, BLOCK_SIZE
-from .schema import Schema
+from .RecordSerializer import RecordSerializer
+from .Block import Block, BLOCK_SIZE
+from .Schema import Schema
+
 
 class TableFileManager:
     """
@@ -84,7 +85,6 @@ class TableFileManager:
         block = Block()
         block.add_record(header)
         block.write_block(self.file_path, 0)
-
 
     def _read_header(self) -> None:
         """

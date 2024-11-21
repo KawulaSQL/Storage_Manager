@@ -12,16 +12,16 @@ class Attribute:
         :param size: The size of the column (in bytes).
         """
 
-        if (dtype not in ["int", "float", "char", "varchar"]) :
+        if dtype not in ["int", "float", "char", "varchar"]:
             raise ValueError("Unsupported Data Type")
 
         self.name: str = name
         self.dtype: str = dtype
         self.size: int = size
 
-        if (dtype == "int" or dtype == "float") :
+        if dtype == "int" or dtype == "float":
             self.size = 4
-        elif (dtype == "char") :
+        elif dtype == "char":
             self.size = 1
 
     def __repr__(self) -> str:
