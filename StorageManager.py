@@ -1,8 +1,8 @@
 from typing import List, Tuple, Dict, Any
 
-from lib.TableFileManager import TableFileManager
-from lib.Schema import Schema
-from lib.Attribute import Attribute
+from lib.tableFileManager import TableFileManager
+from lib.schema import Schema
+from lib.attribute import Attribute
 
 
 class StorageManager:
