@@ -2,8 +2,8 @@
 
 import re
 from StorageManager import StorageManager
-from lib.schema import Schema
-from lib.attribute import Attribute
+from lib.Schema import Schema
+from lib.Attribute import Attribute
 
 
 class TestDriver:

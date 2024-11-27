@@ -211,7 +211,7 @@ class TableFileManager:
             elif attr.dtype == 'varchar':
                 record_size += 2 + attr.size
             else:
-                raise ValueError(f"Unsupported data type: {dtype}")
+                raise ValueError(f"Unsupported data type: {attr.dtype}")
         return record_size
     
     def _get_unique_attr_count(self):
