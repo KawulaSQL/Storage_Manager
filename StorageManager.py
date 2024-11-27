@@ -1,5 +1,6 @@
 from typing import List, Tuple, Dict, Any
-import json, math
+import json
+import math
 
 from lib.TableFileManager import TableFileManager
 from lib.Schema import Schema
@@ -115,16 +116,12 @@ class StorageManager:
         """
         stats = {}
         for table_name, tb_manager in self.tables.items():
-            if(table_name != "information_schema"):
-                table_stats = {}
-                table_stats["n_r"] = tb_manager.record_count
-                table_stats["b_r"] = tb_manager.block_count
-                table_stats["l_r"] = tb_manager._get_max_record_size()
-                table_stats["f_r"] = math.ceil(tb_manager.record_count / tb_manager.block_count)
-                table_stats["v_a_r"] = tb_manager._get_unique_attr_count()
+            if table_name != "information_schema":
+                table_stats = {"n_r": tb_manager.record_count, "b_r": tb_manager.block_count,
+                               "l_r": tb_manager.get_max_record_size(),
+                               "f_r": math.ceil(tb_manager.record_count / tb_manager.block_count),
+                               "v_a_r": tb_manager.get_unique_attr_count()}
 
                 stats[table_name] = table_stats
     
         return json.dumps(stats, indent=4)
-
-

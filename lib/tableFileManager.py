@@ -193,7 +193,7 @@ class TableFileManager:
 
         return records
 
-    def _get_max_record_size(self) -> int:
+    def get_max_record_size(self) -> int:
         """
         Calculate the maximum size of a single record based on the schema.
 
@@ -214,7 +214,7 @@ class TableFileManager:
                 raise ValueError(f"Unsupported data type: {attr.dtype}")
         return record_size
     
-    def _get_unique_attr_count(self):
+    def get_unique_attr_count(self):
         """
         Calculate the amount of unique values per attribute.
 
