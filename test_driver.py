@@ -2,8 +2,8 @@
 
 import re
 from StorageManager import StorageManager
-from lib.Schema import Schema
-from lib.Attribute import Attribute
+from lib.schema import Schema
+from lib.attribute import Attribute
 
 
 class TestDriver:
@@ -68,6 +68,8 @@ class TestDriver:
             print(separator)
             for row in table_data:
                 print(row_format.format(*row))
+            
+            # print(self.storage_manager.get_stats()) # testing purposes
         except ValueError as e:
             print(e)
 

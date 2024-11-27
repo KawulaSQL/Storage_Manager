@@ -1,4 +1,5 @@
 from typing import List, Tuple, Dict, Any
+import json, math
 
 from lib.tableFileManager import TableFileManager
 from lib.schema import Schema
@@ -98,3 +99,32 @@ class StorageManager:
         if table_name not in self.tables:
             raise ValueError(f"{table_name} not in database")
         self.tables[table_name].write_table(values)
+
+    def get_stats(self):
+        """
+        Gets the statistic of every table in a storage.
+
+        A table statistic consists of:
+        nr: number of tuples in a relation r.
+        br: number of blocks containing tuples of r.
+        lr: size of tuple of r.
+        fr: blocking factor of r - i.e., the number of tuples of r that fit into one block.
+        V(A,r): number of distinct values that appear in r for attribute A; same as the size of A(r).
+
+        :return: A JSON structured of key(table name) -> value(table statistic).
+        """
+        stats = {}
+        for table_name, tb_manager in self.tables.items():
+            if(table_name != "information_schema"):
+                table_stats = {}
+                table_stats["n_r"] = tb_manager.record_count
+                table_stats["b_r"] = tb_manager.block_count
+                table_stats["l_r"] = tb_manager._get_max_record_size()
+                table_stats["f_r"] = math.ceil(tb_manager.record_count / tb_manager.block_count)
+                table_stats["v_a_r"] = tb_manager._get_unique_attr_count()
+
+                stats[table_name] = table_stats
+    
+        return json.dumps(stats, indent=4)
+
+

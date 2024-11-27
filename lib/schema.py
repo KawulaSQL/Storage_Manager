@@ -1,6 +1,6 @@
 from typing import List
 
-from .Attribute import Attribute
+from .attribute import Attribute
 
 
 class Schema:

@@ -1,9 +1,9 @@
 import os
 from typing import List, Tuple, Any
 
-from .RecordSerializer import RecordSerializer
-from .Block import Block, BLOCK_SIZE
-from .Schema import Schema
+from .recordSerializer import RecordSerializer
+from .block import Block, BLOCK_SIZE
+from .schema import Schema
 
 
 class TableFileManager:
@@ -201,15 +201,37 @@ class TableFileManager:
         :raises ValueError: If an unsupported data type is encountered.
         """
         record_size = 0
-        for name, dtype, size in self.schema:
-            if dtype == 'int':
+        for attr in self.schema.attributes:
+            if attr.dtype == 'int':
                 record_size += 4
-            elif dtype == 'float':
+            elif attr.dtype == 'float':
                 record_size += 4
-            elif dtype == 'char':
-                record_size += size
-            elif dtype == 'varchar':
-                record_size += 2 + size
+            elif attr.dtype == 'char':
+                record_size += attr.size
+            elif attr.dtype == 'varchar':
+                record_size += 2 + attr.size
             else:
                 raise ValueError(f"Unsupported data type: {dtype}")
         return record_size
+    
+    def _get_unique_attr_count(self):
+        """
+        Calculate the amount of unique values per attribute.
+
+        :return: A JSON structured of key(table name) -> value(unique count).
+        """
+        records = self.read_table()
+        attr_names = [attr[0] for attr in self.schema.get_metadata()]
+        attr_record = [[] for _ in range(len(attr_names))]
+
+        for rec in records:
+            for i in range(len(rec)):
+                attr_record[i].append(rec[i])
+        
+        attr_count = {}
+
+        for i in range(len(attr_names)):
+            attr_count[attr_names[i]] = len(list(set(attr_record[i]))) # Counts the length of the unique attribute records
+        
+        return attr_count
+        
