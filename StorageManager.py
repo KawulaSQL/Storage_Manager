@@ -2,6 +2,7 @@ from typing import List, Tuple, Dict, Any
 import json
 import math
 
+from lib import Block
 from lib.TableFileManager import TableFileManager
 from lib.Schema import Schema
 from lib.Attribute import Attribute
@@ -26,29 +27,9 @@ class StorageManager:
         self.information_schema: TableFileManager
         self.tables: Dict[str, TableFileManager] = {}
 
-        self._initialize_information_schema()
+        self.__initialize_information_schema()
 
-    def _initialize_information_schema(self) -> None:
-        """
-        Initialize or load the information_schema table that holds table names.
-        """
-        schema = Schema([Attribute("table_name", "varchar", 50)])
-        self.information_schema = TableFileManager("information_schema", schema)
-        self.tables["information_schema"] = self.information_schema
-
-        table_names = self.get_table_data("information_schema")
-        for table_name in table_names:
-            table_name = table_name[0]
-            self.tables[table_name] = TableFileManager(table_name)
-
-    def list_tables(self) -> List[str]:
-        """
-        Lists all table names stored in the information_schema.
-
-        :return: A list of table names.
-        """
-        table_data = self.get_table_data("information_schema")
-        return [table[0] for table in table_data]
+    # ===== Public Methods ===== #
 
     def create_table(self, table_name: str, schema: Schema) -> None:
         """
@@ -63,9 +44,11 @@ class StorageManager:
         table_manager = TableFileManager(table_name, schema)
         self.tables[table_name] = table_manager
 
-        self.add_table_to_information_schema(table_name)
+        self.__add_table_to_information_schema(table_name)
 
-    def get_table_data(self, table_name: str, condition: Condition | None = None) -> List[Tuple]:
+    def get_table_data(
+        self, table_name: str, condition: Condition | None = None
+    ) -> List[Tuple]:
         # TODO: conditional select
         """
         Retrieves all records from a specified table.
@@ -78,6 +61,10 @@ class StorageManager:
 
         return self.tables[table_name].read_table()
 
+    def update_table_record(self, table_name: str, condition: Condition) -> int:
+        # TODO: update_table_record, NOTE FUNGSI INI BAKAL DIUBAH LAGI PARAMETER/NAMANYA
+        pass
+
     def insert_into_table(self, table_name: str, values: List[Tuple[Any, ...]]) -> None:
         """
         Insert tuples of data into the specified table.
@@ -88,10 +75,6 @@ class StorageManager:
         if table_name not in self.tables:
             raise ValueError(f"{table_name} not in database")
         self.tables[table_name].write_table(values)
-
-    def update_table_record(self, table_name: str) -> int:
-        # TODO: update_table_record, NOTE FUNGSI INI BAKAL DIUBAH LAGI PARAMETER/NAMANYA
-        pass
 
     def delete_table(self, table_name: str) -> None:
         # TODO: delete_table
@@ -107,6 +90,7 @@ class StorageManager:
         """
         Deletes records from a table based on a condition.
 
+        :param condition:
         :param table_name: The name of the table to delete records from.
         :param Condition: The condition of delete.
         :return: numbers of records effected
@@ -115,7 +99,26 @@ class StorageManager:
 
         return 0
 
-    def get_stats(self):
+    def get_table_schema(self, table_name):
+        """
+        Retrieves the schema of a specified table.
+
+        :return: Schema of the table requested.
+        """
+        if table_name not in self.tables:
+            raise ValueError(f"{table_name} not in database")
+        return self.tables[table_name].schema
+
+    def list_tables(self) -> List[str]:
+        """
+        Lists all table names stored in the information_schema.
+
+        :return: A list of table names.
+        """
+        table_data = self.get_table_data("information_schema")
+        return [table[0] for table in table_data]
+
+    def get_stats(self) -> str:
         """
         Gets the statistic of every table in a storage.
 
@@ -143,20 +146,41 @@ class StorageManager:
 
         return json.dumps(stats, indent=4)
 
-    def add_table_to_information_schema(self, table_name: str) -> None:
+    def write_buffer(self):
+        # TODO: write buffer add params
+        """
+        Writes buffer to disk with the given identifier.
+
+        :param identifier: block identifier for file name.
+        """
+        pass
+
+    def read_buffer(self):
+        # TODO: read buffer add params
+        """
+        Reads buffer from disk with the given identifier.
+        """
+        pass
+
+    # ===== Private Methods ===== #
+
+    def __initialize_information_schema(self) -> None:
+        """
+        Initialize or load the information_schema table that holds table names.
+        """
+        schema = Schema([Attribute("table_name", "varchar", 50)])
+        self.information_schema = TableFileManager("information_schema", schema)
+        self.tables["information_schema"] = self.information_schema
+
+        table_names = self.get_table_data("information_schema")
+        for table_name in table_names:
+            table_name = table_name[0]
+            self.tables[table_name] = TableFileManager(table_name)
+
+    def __add_table_to_information_schema(self, table_name: str) -> None:
         """
         Adds a table name to the information_schema table.
 
         :param table_name: Name of the table to add.
         """
         self.information_schema.write_table([(table_name,)])
-
-    def get_table_schema(self, table_name):
-        """
-        Retrieves the schema of a specified table.
-
-        :return: Schema of the table requested.
-        """
-        if table_name not in self.tables:
-            raise ValueError(f"{table_name} not in database")
-        return self.tables[table_name].schema
