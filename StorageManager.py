@@ -59,7 +59,54 @@ class StorageManager:
         if table_name not in self.tables:
             raise ValueError(f"Table {table_name} not found.")
 
-        return self.tables[table_name].read_table()
+        records = self.tables[table_name].read_table()
+        attributes = [col[0] for col in self.get_table_schema(table_name).get_metadata()]
+        types = [col[1] for col in self.get_table_schema(table_name).get_metadata()]
+
+        if condition and table_name != 'information_schema':
+            try:
+                if condition.operand1["isAttribute"]:
+                    col_1 = attributes.index(condition.operand1["value"])
+                    condition.operand1["type"] = types[col_1]
+                else:
+                    col_1 = condition.operand1["value"]
+
+                if condition.operand2["isAttribute"]:
+                    col_2 = attributes.index(condition.operand2["value"])
+                    condition.operand1["type"] = types[col_2]
+                else:
+                    col_2 = condition.operand2["value"]
+            except:
+                raise ValueError("There's an error in the column input")
+
+            # print(condition.operand1, condition.operand2) # testing purposes
+
+            if condition.operand1["type"] != condition.operand2["type"]:
+                raise ValueError(f"TypeError: {condition.operand1['type']} with {condition.operand2['type']}")
+
+            temp_rec = []
+            if condition.operand1["isAttribute"]:
+                if condition.operand2["isAttribute"]:
+                    for i in range(len(records)):
+                        if condition.evaluate(records[i][col_1], records[i][col_2]):
+                            temp_rec.append(records[i])
+                else: # Either col_2 string or integer
+                    for i in range(len(records)):
+                        if condition.evaluate(records[i][col_1], col_2):
+                            temp_rec.append(records[i])
+                        
+            else: # Either col_1 string or integer
+                if condition.operand2["isAttribute"]:
+                    for i in range(len(records)):
+                        if condition.evaluate(col_1, records[i][col_2]):
+                            temp_rec.append(records[i])
+                else: # Either col_2 string or integer
+                    for i in range(len(records)):
+                        if condition.evaluate(col_1, col_2):
+                            temp_rec.append(records[i])
+            records = temp_rec
+
+        return records
 
     def update_table_record(self, table_name: str, condition: Condition) -> int:
         # TODO: update_table_record, NOTE FUNGSI INI BAKAL DIUBAH LAGI PARAMETER/NAMANYA

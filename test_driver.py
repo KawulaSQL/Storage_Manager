@@ -4,6 +4,7 @@ import re
 from StorageManager import StorageManager
 from lib.Schema import Schema
 from lib.Attribute import Attribute
+from lib.Condition import Condition
 
 
 class TestDriver:
@@ -42,24 +43,31 @@ class TestDriver:
 
     def parse_select(self, statement: str) -> None:
         """Parse SELECT * FROM table_name statement and print the result."""
-        table_name_match = re.search(r"SELECT \* FROM (\w+)", statement, re.IGNORECASE)
-        if not table_name_match:
+        match = re.search(r"SELECT\s+(.*?)\s+FROM\s+(\w+)(?:\s+WHERE\s+(.*))?", statement, re.IGNORECASE)
+        if not match:
             print("Error: Invalid SELECT statement.")
             return
 
-        table_name = table_name_match.group(1)
+        column_selected = match.group(1)
+        table_name = match.group(2)
+        where_clause = match.group(3).split(" ")
         try:
-            table_data = self.storage_manager.get_table_data(table_name)
+            table_data = self.storage_manager.get_table_data(table_name, Condition(where_clause[0], where_clause[1], where_clause[2]))
             schema = self.storage_manager.get_table_schema(table_name)
-            column_names = [attr[0] for attr in schema.get_metadata()]
+            all_columns = [attr[0] for attr in schema.get_metadata()]
             
-            if not table_data:
-                print(f"No data found in table '{table_name}'.")
-                return
+            if column_selected.strip() == "*":
+                column_names = all_columns
+            else:
+                column_names = [col.strip() for col in column_selected.split(",")]
+                if not set(column_names).issubset(all_columns):
+                    print(f"Error: Some specified columns do not exist in table '{table_name}'.")
+                    return
 
             column_widths = [len(name) for name in column_names]
             for row in table_data:
-                column_widths = [max(width, len(str(value))) for width, value in zip(column_widths, row)]
+                filtered_row = [row[all_columns.index(col)] for col in column_names]
+                column_widths = [max(width, len(str(value))) for width, value in zip(column_widths, filtered_row)]
 
             row_format = " | ".join(f"{{:<{width}}}" for width in column_widths)
             separator = "-+-".join("-" * width for width in column_widths)
@@ -67,7 +75,8 @@ class TestDriver:
             print(row_format.format(*column_names))
             print(separator)
             for row in table_data:
-                print(row_format.format(*row))
+                filtered_row = [row[all_columns.index(col)] for col in column_names]
+                print(row_format.format(*filtered_row))
             
             # print(self.storage_manager.get_stats()) # testing purposes
         except ValueError as e:
@@ -137,7 +146,7 @@ class TestDriver:
             elif statement.lower().startswith("create table"):
                 self.parse_create_table(statement)
 
-            elif statement.lower().startswith("select * from"):
+            elif statement.lower().startswith("select"):
                 self.parse_select(statement)
 
             elif statement.lower().startswith("insert into"):
