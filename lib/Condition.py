@@ -1,13 +1,13 @@
-from lib.Attribute import Attribute
-import re
+from typing import Any
+
 
 class Condition:
     """
     A class to represent a condition in a query.
 
-    :param column1: The name of the first column.
+    :param operand1: The name of the first column or value.
     :param operator: The comparison operator.
-    :param column2_or_value: The second column name or a value to compare against.
+    :param operand2: The second column name or a value to compare against.
     """
 
     def __init__(self, operand1: str, operator: str, operand2: str):
@@ -19,9 +19,9 @@ class Condition:
         :param operator: The comparison operator.
         :param operand2: The second column name or a value to compare against.
         """
-        self.operand1: str | int | float = self.classify_operand(operand1)
+        self.operand1: dict[str, Any] = self.classify_operand(operand1)
         self.operator: str = operator  # enum of <, >, =, <=, >=, !=
-        self.operand2: str | int | float = self.classify_operand(operand2)
+        self.operand2: dict[str, Any] = self.classify_operand(operand2)
 
         if operator not in ["<", ">", "=", "<=", ">=", "!="]:
             raise ValueError("Invalid operator")
@@ -55,30 +55,36 @@ class Condition:
             return value1 != value2
         else:
             raise ValueError("Invalid operator")
-    
-    def classify_operand(self, operand):
+
+    @staticmethod
+    def classify_operand(operand: str) -> dict[str, Any]:
+        """
+        Classify the operand as an attribute or a value.
+
+        :param operand: attribute or value
+        """
         if operand.replace('.', '', 1).isdigit():
             if '.' in operand:
                 return {
-                    "value" : float(operand), 
+                    "value": float(operand),
                     "isAttribute": False,
                     "type": "float"
-                    }
+                }
             else:
                 return {
-                    "value" : int(operand), 
+                    "value": int(operand),
                     "isAttribute": False,
                     "type": "int"
-                    }
-            
+                }
+
         if operand.startswith("'") and operand.endswith("'"):
             return {
                 "value": operand.strip("'"),
                 "isAttribute": False,
                 "type": "varchar"
-                }
-        
+            }
+
         return {
             "value": operand,
             "isAttribute": True
-                }
+        }

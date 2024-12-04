@@ -46,13 +46,11 @@ class StorageManager:
 
         self.__add_table_to_information_schema(table_name)
 
-    def get_table_data(
-        self, table_name: str, condition: Condition | None = None
-    ) -> List[Tuple]:
-        # TODO: conditional select
+    def get_table_data(self, table_name: str, condition: Condition | None = None) -> List[Tuple[Any, ...]]:
         """
         Retrieves all records from a specified table.
 
+        :param condition: Condition
         :param table_name: The name of the table to fetch data from.
         :return: A list of tuples containing the table records.
         """
@@ -76,7 +74,8 @@ class StorageManager:
                     condition.operand1["type"] = types[col_2]
                 else:
                     col_2 = condition.operand2["value"]
-            except:
+
+            except Exception:
                 raise ValueError("There's an error in the column input")
 
             # print(condition.operand1, condition.operand2) # testing purposes
@@ -90,17 +89,19 @@ class StorageManager:
                     for i in range(len(records)):
                         if condition.evaluate(records[i][col_1], records[i][col_2]):
                             temp_rec.append(records[i])
-                else: # Either col_2 string or integer
+
+                else:  # Either col_2 string or integer
                     for i in range(len(records)):
                         if condition.evaluate(records[i][col_1], col_2):
                             temp_rec.append(records[i])
-                        
-            else: # Either col_1 string or integer
+
+            else:  # Either col_1 string or integer
                 if condition.operand2["isAttribute"]:
                     for i in range(len(records)):
-                        if condition.evaluate(col_1, records[i][col_2]):
+                        if condition.evaluate(col_1, records[i
+                        ][col_2]):
                             temp_rec.append(records[i])
-                else: # Either col_2 string or integer
+                else:  # Either col_2 string or integer
                     for i in range(len(records)):
                         if condition.evaluate(col_1, col_2):
                             temp_rec.append(records[i])
