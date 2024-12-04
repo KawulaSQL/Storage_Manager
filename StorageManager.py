@@ -5,7 +5,12 @@ import math
 from lib.TableFileManager import TableFileManager
 from lib.Schema import Schema
 from lib.Attribute import Attribute
+from lib.Index import HashIndex
+from lib.Block import Block
 
+import hashlib
+import pickle
+import struct
 
 class StorageManager:
     def __init__(self, base_path: str) -> None:
@@ -22,6 +27,9 @@ class StorageManager:
         self.tables: Dict[str, TableFileManager] = {}
 
         self._initialize_information_schema()
+        
+        self.index: HashIndex
+
 
     def _initialize_information_schema(self) -> None:
         """
@@ -125,3 +133,78 @@ class StorageManager:
                 stats[table_name] = table_stats
     
         return json.dumps(stats, indent=4)
+
+    def set_index(self, table: str, column: str, index_type: str) -> None:
+        """
+        Create an index on a specified column of a table.
+
+        :param table: The name of the table.
+        :param column: The column to index.
+        :param index_type: The type of index (baru hash).
+        :raises ValueError: If the index type is unsupported.
+        """
+        if index_type != "hash":
+            raise ValueError("Unsupported index type. Only 'hash' is implemented.")
+
+        schema = self.get_table_schema(table)
+        metadata = schema.get_metadata()
+        # records = self.get_table_data(table)
+        attrCount = -1
+        dtype = "null"
+        for i in range (len(metadata)) :
+            if metadata[i][0] == column :
+                attrCount = i 
+                dtype = metadata[i][1]
+
+        if (attrCount == -1) :
+            raise Exception("There is no such column!")
+
+        self.index = HashIndex()
+        tfm = TableFileManager(table, schema)
+        # records: List[Tuple[Any, ...]] = []
+        current_block = 0
+
+        while current_block < tfm.block_count:
+            block = Block.read_block(tfm.file_path, current_block)
+            offset = 0
+
+            if current_block == 0:
+                header_length = int.from_bytes(block.data[4:8], byteorder='little')
+                offset = header_length
+
+            while offset < block.header["free_space_offset"]:
+                record_bytes = bytearray()
+
+                while block.data[offset] != 0xCC:
+                    record_bytes.append(block.data[offset])
+                    offset += 1
+
+                record_bytes.append(block.data[offset])
+                offset += 1
+
+                record = tfm.serializer.deserialize(record_bytes)
+                # records.append(record)
+                
+                print("isi record : ")
+                print(record)
+                # record = tfm.serializer.serialize(record)
+                if dtype == "int":
+                    key = int(hashlib.sha256(int(record[attrCount]).to_bytes()).hexdigest(), 16) % (2**32)
+                elif dtype == "float":
+                    key = int(hashlib.sha256(struct.pack('f', float(record[attrCount]))).hexdigest(), 16) % (2**32)
+                elif dtype == "char":
+                    key = int(hashlib.sha256(str(record[attrCount]).encode('utf-8')).hexdigest(), 16) % (2**32)
+                elif dtype == "varchar":
+                    key = int(hashlib.sha256(str(record[attrCount]).encode('utf-8')).hexdigest(), 16) % (2**32)
+                # key = int(hashlib.sha256(record[attrCount]).hexdigest(), 16) % (2**32)
+                self.index.add(key, (current_block, offset))
+
+            current_block += 1
+
+        path = table + "-" + column + "-hash" + ".pickle"
+
+        with open(path, "wb") as file:  # Open in binary write mode
+            pickle.dump(self.index, file)
+
+sm = StorageManager("./storage")
+sm.set_index("coba", "nilai", "hash")

@@ -6,6 +6,7 @@ import uuid
 from lib.Schema import Schema
 from lib.Attribute import Attribute
 from StorageManager import StorageManager
+from lib.Block import Block
 
 
 class TestStorageManager(unittest.TestCase):
