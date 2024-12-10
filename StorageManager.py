@@ -117,7 +117,8 @@ class StorageManager:
                             temp_rec.append(records[i])
 
                 else:  # Either col_2 string or integer
-                    is_indexed = self.get_index(table_name, condition.operand1["value"], condition.operand2["value"], condition.operand2["types"])
+                    is_indexed = self.get_index(table_name, condition.operand1["value"], condition.operand2["value"], condition.operand2["type"])
+                    print("is_indexed = ", is_indexed) 
                     if (is_indexed == None) :
                         for i in range(len(records)):
                             if condition.evaluate(records[i][col_1], col_2):
@@ -126,7 +127,8 @@ class StorageManager:
                         temp_rec = is_indexed
             else:  # Either col_1 string or integer
                 if condition.operand2["isAttribute"]:
-                    is_indexed = self.get_index(table_name, condition.operand2["value"], condition.operand1["value"], condition.operand1["types"])
+                    is_indexed = self.get_index(table_name, condition.operand2["value"], condition.operand1["value"], condition.operand1["type"])
+                    print("is_indexed = ", is_indexed) 
                     if (is_indexed == None) :
                         for i in range(len(records)):
                             if condition.evaluate(col_1, records[i][col_2]):
@@ -311,6 +313,7 @@ class StorageManager:
             while offset < block.header["free_space_offset"]:
                 record_bytes = bytearray()
 
+                offset_note = offset
                 while block.data[offset] != 0xCC:
                     record_bytes.append(block.data[offset])
                     offset += 1
@@ -351,17 +354,19 @@ class StorageManager:
                         16,
                     ) % (2**32)
                 # key = int(hashlib.sha256(record[attrCount]).hexdigest(), 16) % (2**32)
-                self.index.add(key, (current_block, offset))
+                self.index.add(key, (current_block, offset_note))
 
             current_block += 1
 
-        path = "./storage" + table + "-" + column + "-hash" + ".pickle"
+        # path = "./storage" + table_name + "-" + column + "-hash" + ".pickle"
+        path = os.path.join("./storage", f"{table_name}-{column}-hash.pickle")
 
         with open(path, "wb") as file:  # Open in binary write mode
             pickle.dump(self.index, file)
 
     def get_index(self, table: str, column: str, value: str | int | float, dtype: str) :
-        file_path = "./storage" + table + "-" + column + "-hash" + ".pickle"
+        print("masuk getIndex")
+        file_path = os.path.join("./storage", f"{table}-{column}-hash.pickle")
         if (not (os.path.isfile(file_path))) :
             return None 
         
@@ -378,6 +383,7 @@ class StorageManager:
             key = int(hashlib.sha256(str(value).encode('utf-8')).hexdigest(), 16) % (2**32)
         
         index_result = self.index.find(key)
+        print("index_result : ", index_result) 
         
         schema = self.get_table_schema(table)
         # metadata = schema.get_metadata()
@@ -388,12 +394,21 @@ class StorageManager:
             current_block = index_result[i][0]
             offset = index_result[i][1]
             block = Block.read_block(tfm.file_path, current_block)
+            
+            record_bytes = bytearray()
 
-            result.append(block.data[offset])
+            while block.data[offset] != 0xCC:
+                record_bytes.append(block.data[offset])
+                offset += 1
+
+            record_bytes.append(block.data[offset])
+
+            record = tfm.serializer.deserialize(record_bytes)
+
+            result.append(record)
+            print("record : ", record)
         
         return result
-
         
-        
-sm = StorageManager("./storage")
-sm.set_index("coba", "nilai", "hash")
+# sm = StorageManager("./storage")
+# sm.set_index("coba", "nilai", "hash")
