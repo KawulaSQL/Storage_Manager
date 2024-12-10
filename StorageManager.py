@@ -384,6 +384,33 @@ class StorageManager:
         with open(path, "wb") as file:  # Open in binary write mode
             pickle.dump(self.index, file)
 
+    def update_table(self, table_name: str, condition: Condition, update_values: dict):
+        """Update records in a table based on a condition."""
+        table_file_manager = self.tables[table_name]
+        
+        schema = table_file_manager.schema
+        col_1_index = next(
+            (i for i, attr in enumerate(schema.attributes) 
+            if attr.name == condition.operand1['value']), 
+            None
+        )
+        
+        if col_1_index is None:
+            raise ValueError(f"Column {condition.operand1['value']} not found in table")
+        
+        if condition.operand2['isAttribute']:
+            col_2 = next(
+                (i for i, attr in enumerate(schema.attributes) 
+                if attr.name == condition.operand2['value']), 
+                None
+            )
+            if col_2 is None:
+                raise ValueError(f"Column {condition.operand2['value']} not found in table")
+        else:
+            col_2 = condition.operand2
+        
+        return table_file_manager.update_record(col_1_index, col_2, condition, update_values)
+
 
 # if __name__ == "__main__":
 #     storage = StorageManager("storage")

@@ -50,9 +50,16 @@ class TestDriver:
 
         column_selected = match.group(1)
         table_name = match.group(2)
-        where_clause = match.group(3).split(" ")
         try:
-            table_data = self.storage_manager.get_table_data(table_name, Condition(where_clause[0], where_clause[1], where_clause[2]))
+            where_clause = match.group(3).split(" ")
+        except:
+            where_clause = None
+
+        try:
+            if where_clause:
+                table_data = self.storage_manager.get_table_data(table_name, Condition(where_clause[0], where_clause[1], where_clause[2]))
+            else: 
+                table_data = self.storage_manager.get_table_data(table_name)
             schema = self.storage_manager.get_table_schema(table_name)
             all_columns = [attr[0] for attr in schema.get_metadata()]
             
@@ -134,6 +141,57 @@ class TestDriver:
         except ValueError as e:
             print(e)
 
+    def parse_update(self, statement: str) -> None:
+        """Parse UPDATE table_name SET column1=value1, column2=value2 WHERE condition statement."""
+        update_match = re.search(r"UPDATE\s+(\w+)\s+SET\s+(.+?)\s+WHERE\s+(.+)", statement, re.IGNORECASE)
+        
+        if not update_match:
+            print("Error: Invalid UPDATE statement.")
+            return
+
+        table_name = update_match.group(1)
+        set_clause = update_match.group(2)
+        where_clause = update_match.group(3)
+
+        update_values = {}
+        for assignment in set_clause.split(','):
+            assignment = assignment.strip()
+            col_match = re.match(r"(\w+)\s*=\s*(.+)", assignment)
+            if not col_match:
+                print(f"Error: Invalid assignment '{assignment}'")
+                return
+            
+            column = col_match.group(1)
+            value = col_match.group(2).strip()
+            update_values[column] = self._parse_value(value)
+
+        where_parts = where_clause.split()
+        if len(where_parts) != 3:
+            print("Error: Invalid WHERE clause.")
+            return
+
+        try:
+            condition = Condition(where_parts[0], where_parts[1], where_parts[2])
+            
+            rows_affected = self.storage_manager.update_table(table_name, condition, update_values)
+            print(f"{rows_affected} row(s) updated in '{table_name}'.")
+        except ValueError as e:
+            print(f"Error: {e}")
+
+    def _parse_value(self, value: str):
+        """Helper method to parse and convert values."""
+        if (value.startswith("'") and value.endswith("'")) or \
+        (value.startswith('"') and value.endswith('"')):
+            return value.strip("'\"")
+        
+        if value.isdigit():
+            return int(value)
+        
+        try:
+            return float(value)
+        except ValueError:
+            return value
+
     def run(self) -> None:
         """Run the CLI driver."""
         while True:
@@ -154,6 +212,9 @@ class TestDriver:
 
             elif statement.lower().startswith("schema"):
                 self.parse_schema(statement)
+
+            elif statement.lower().startswith("update"):
+                self.parse_update(statement)
 
             else:
                 print("Error: Unsupported KWL statement.")

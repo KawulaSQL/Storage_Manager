@@ -235,6 +235,63 @@ class TableFileManager:
             current_block += 1
 
         return rows_effected
+    
+    def update_record(self, col_1_index: int, col_2: int | dict[str, Any], condition: Condition, update_values: dict[str, Any]) -> int:
+        """
+        Update records that match the specified condition.
+
+        :param col_1_index: Index of the first column to check in the condition
+        :param col_2: Index of the second column or a dictionary with value and type
+        :param condition: Condition to evaluate for updating records
+        :param update_values: Dictionary of column names and their new values to update
+        :return: Number of rows affected by the update operation
+        """
+
+        records = self.read_table()
+        rows_affected = 0
+
+        updated_records = []
+
+        for record in records:
+            record_list = list(record)
+
+            if condition.operand2["isAttribute"]:
+                if condition.evaluate(record[col_1_index], record[col_2]):
+                    for col_name, new_value in update_values.items():
+                        col_index = next(
+                            (i for i, attr in enumerate(self.schema.attributes) 
+                            if attr.name == col_name), 
+                            None
+                        )
+                        if col_index is not None:
+                            record_list[col_index] = new_value
+                    
+                    rows_affected += 1
+            else:
+                if condition.evaluate(record[col_1_index], col_2['value']):
+                    for col_name, new_value in update_values.items():
+                        col_index = next(
+                            (i for i, attr in enumerate(self.schema.attributes) 
+                            if attr.name == col_name), 
+                            None
+                        )
+                        if col_index is not None:
+                            record_list[col_index] = new_value
+                    
+                    rows_affected += 1
+            
+            updated_records.append(tuple(record_list))
+
+        self.block_count = 1
+        self.record_count = 0
+        
+        with open(self.file_path, 'wb') as f:
+            pass
+
+        self._write_header()
+        self.write_table(updated_records)
+
+        return rows_affected
 
     def get_max_record_size(self) -> int:
         """
