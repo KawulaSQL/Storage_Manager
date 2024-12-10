@@ -13,6 +13,7 @@ from lib.Block import Block
 import hashlib
 import pickle
 import struct
+import os
 
 class StorageManager:
     """
@@ -76,11 +77,11 @@ class StorageManager:
         if table_name not in self.tables:
             raise ValueError(f"Table {table_name} not found.")
 
-        records = self.tables[table_name].read_table()
-        attributes = [col[0] for col in self.get_table_schema(table_name).get_metadata()]
-        types = [col[1] for col in self.get_table_schema(table_name).get_metadata()]
+        records = []
 
         if condition and table_name != 'information_schema':
+            attributes = [col[0] for col in self.get_table_schema(table_name).get_metadata()]
+            types = [col[1] for col in self.get_table_schema(table_name).get_metadata()]
             try:
                 if condition.operand1["isAttribute"]:
                     col_1 = attributes.index(condition.operand1["value"])
@@ -99,9 +100,12 @@ class StorageManager:
 
             # print(condition.operand1, condition.operand2) # testing purposes
 
+            
             if condition.operand1["type"] != condition.operand2["type"]:
                 raise ValueError(f"TypeError: {condition.operand1['type']} with {condition.operand2['type']}")
 
+            records = self.tables[table_name].read_table()
+            
             temp_rec = []
             if condition.operand1["isAttribute"]:
                 if condition.operand2["isAttribute"]:
@@ -110,16 +114,22 @@ class StorageManager:
                             temp_rec.append(records[i])
 
                 else:  # Either col_2 string or integer
-                    for i in range(len(records)):
-                        if condition.evaluate(records[i][col_1], col_2):
-                            temp_rec.append(records[i])
-
+                    is_indexed = self.get_index(table_name, condition.operand1["value"], condition.operand2["value"], condition.operand2["types"])
+                    if (is_indexed == None) :
+                        for i in range(len(records)):
+                            if condition.evaluate(records[i][col_1], col_2):
+                                temp_rec.append(records[i])
+                    else :
+                        temp_rec = is_indexed
             else:  # Either col_1 string or integer
                 if condition.operand2["isAttribute"]:
-                    for i in range(len(records)):
-                        if condition.evaluate(col_1, records[i
-                        ][col_2]):
-                            temp_rec.append(records[i])
+                    is_indexed = self.get_index(table_name, condition.operand2["value"], condition.operand1["value"], condition.operand1["types"])
+                    if (is_indexed == None) :
+                        for i in range(len(records)):
+                            if condition.evaluate(col_1, records[i][col_2]):
+                                temp_rec.append(records[i])
+                    else :
+                        temp_rec = is_indexed
                 else:  # Either col_2 string or integer
                     for i in range(len(records)):
                         if condition.evaluate(col_1, col_2):
@@ -319,10 +329,45 @@ class StorageManager:
 
             current_block += 1
 
-        path = table + "-" + column + "-hash" + ".pickle"
+        path = "./storage" + table + "-" + column + "-hash" + ".pickle"
 
         with open(path, "wb") as file:  # Open in binary write mode
             pickle.dump(self.index, file)
 
+    def get_index(self, table: str, column: str, value: str | int | float, dtype: str) :
+        file_path = "./storage" + table + "-" + column + "-hash" + ".pickle"
+        if (not (os.path.isfile(file_path))) :
+            return None 
+        
+        with open(file_path, "rb") as file:  # Open in binary read mode
+            self.index = pickle.load(file)
+        
+        if dtype == "int":
+            key = int(hashlib.sha256(int(value).to_bytes()).hexdigest(), 16) % (2**32)
+        elif dtype == "float":
+            key = int(hashlib.sha256(struct.pack('f', float(value))).hexdigest(), 16) % (2**32)
+        elif dtype == "char":
+            key = int(hashlib.sha256(str(value).encode('utf-8')).hexdigest(), 16) % (2**32)
+        elif dtype == "varchar":
+            key = int(hashlib.sha256(str(value).encode('utf-8')).hexdigest(), 16) % (2**32)
+        
+        index_result = self.index.find(key)
+        
+        schema = self.get_table_schema(table)
+        # metadata = schema.get_metadata()
+        tfm = TableFileManager(table, schema)
+
+        result = []
+        for i in range(len(index_result)) :
+            current_block = index_result[i][0]
+            offset = index_result[i][1]
+            block = Block.read_block(tfm.file_path, current_block)
+
+            result.append(block.data[offset])
+        
+        return result
+
+        
+        
 sm = StorageManager("./storage")
 sm.set_index("coba", "nilai", "hash")
