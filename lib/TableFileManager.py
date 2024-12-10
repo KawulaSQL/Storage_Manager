@@ -4,6 +4,7 @@ from typing import List, Tuple, Any
 from .RecordSerializer import RecordSerializer
 from .Block import Block, BLOCK_SIZE
 from .Schema import Schema
+from .Condition import Condition
 
 
 class TableFileManager:
@@ -192,6 +193,48 @@ class TableFileManager:
             current_block += 1
 
         return records
+
+    def delete_record(self, col_1_index: int, col_2: int | dict[str, Any], condition: Condition) -> int:
+        current_block = 0
+        rows_effected = 0
+
+        while current_block < self.block_count:
+            block = Block.read_block(self.file_path, current_block)
+            offset = 0
+
+            if current_block == 0:
+                header_length = int.from_bytes(block.data[4:8], byteorder='little')
+                offset = header_length
+
+            while offset < block.header["free_space_offset"]:
+                record_bytes = bytearray()
+
+                while block.data[offset] != 0xCC:
+                    record_bytes.append(block.data[offset])
+                    offset += 1
+
+                record_bytes.append(block.data[offset])
+                offset += 1
+
+                record = self.serializer.deserialize(record_bytes)
+                print(record)
+
+                if condition.operand2["isAttribute"]:
+                    # col 2 is attribute
+                    if condition.evaluate(record[col_1_index], record[col_2]):
+                        # delete record
+                        print(f"record to delete: {record}")
+                        rows_effected += 1
+
+                else:  # col 2 is value
+                    if condition.evaluate(record[col_1_index], col_2['value']):
+                        # delete record
+                        print(f"record to delete: {record}")
+                        rows_effected += 1
+
+            current_block += 1
+
+        return rows_effected
 
     def get_max_record_size(self) -> int:
         """

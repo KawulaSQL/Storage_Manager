@@ -3,7 +3,7 @@ class Attribute:
     Represents a single column in the table schema.
     """
 
-    def __init__(self, name: str, dtype: str, size: int) -> None:
+    def __init__(self, name: str, dtype: str, size: int = None) -> None:
         """
         Initialize an Attribute.
 
