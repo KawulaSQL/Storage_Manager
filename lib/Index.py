@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 
 
@@ -8,9 +8,9 @@ class HashIndex:
     """
 
     def __init__(self):
-        self.index: Dict[int, List[int]] = {}
+        self.index: Dict[int, List[Tuple[int, int]]] = {}
 
-    def add(self, key: int, record_id: int) -> None:
+    def add(self, key: int, record_tuple: Tuple[int, int]) -> None:
         """
         Add a key-record pair to the hash index.
 
@@ -19,9 +19,9 @@ class HashIndex:
         """
         if key not in self.index:
             self.index[key] = []
-        self.index[key].append(record_id)
+        self.index[key].append(record_tuple)
 
-    def find(self, key: int) -> List[int]:
+    def find(self, key: int) -> List[Tuple[int, int]]:
         """
         Retrieve record IDs matching a specific key.
 
