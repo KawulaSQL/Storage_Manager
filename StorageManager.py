@@ -14,6 +14,7 @@ import hashlib
 import pickle
 import struct
 
+
 class StorageManager:
     """
     Representation of Storage Manager Component of a DBMS
@@ -33,19 +34,18 @@ class StorageManager:
         self.tables: Dict[str, TableFileManager] = {}
 
         self._initialize_information_schema()
-        
-        self.index: HashIndex
 
+        self.index: HashIndex
 
     def _initialize_information_schema(self) -> None:
         """
         Initialize or load the information_schema table that holds table names.
         """
-        schema = Schema([Attribute('table_name', 'varchar', 50)])
-        self.information_schema = TableFileManager('information_schema', schema)
+        schema = Schema([Attribute("table_name", "varchar", 50)])
+        self.information_schema = TableFileManager("information_schema", schema)
         self.tables["information_schema"] = self.information_schema
 
-        table_names = self.get_table_data('information_schema')
+        table_names = self.get_table_data("information_schema")
         for table_name in table_names:
             table_name = table_name[0]
             self.tables[table_name] = TableFileManager(table_name)
@@ -65,7 +65,9 @@ class StorageManager:
 
         self.__add_table_to_information_schema(table_name)
 
-    def get_table_data(self, table_name: str, condition: Condition | None = None) -> List[Tuple[Any, ...]]:
+    def get_table_data(
+        self, table_name: str, condition: Condition | None = None
+    ) -> List[Tuple[Any, ...]]:
         """
         Retrieves all records from a specified table.
 
@@ -77,10 +79,12 @@ class StorageManager:
             raise ValueError(f"Table {table_name} not found.")
 
         records = self.tables[table_name].read_table()
-        attributes = [col[0] for col in self.get_table_schema(table_name).get_metadata()]
+        attributes = [
+            col[0] for col in self.get_table_schema(table_name).get_metadata()
+        ]
         types = [col[1] for col in self.get_table_schema(table_name).get_metadata()]
 
-        if condition and table_name != 'information_schema':
+        if condition and table_name != "information_schema":
             try:
                 if condition.operand1["isAttribute"]:
                     col_1 = attributes.index(condition.operand1["value"])
@@ -100,7 +104,9 @@ class StorageManager:
             # print(condition.operand1, condition.operand2) # testing purposes
 
             if condition.operand1["type"] != condition.operand2["type"]:
-                raise ValueError(f"TypeError: {condition.operand1['type']} with {condition.operand2['type']}")
+                raise ValueError(
+                    f"TypeError: {condition.operand1['type']} with {condition.operand2['type']}"
+                )
 
             temp_rec = []
             if condition.operand1["isAttribute"]:
@@ -117,8 +123,7 @@ class StorageManager:
             else:  # Either col_1 string or integer
                 if condition.operand2["isAttribute"]:
                     for i in range(len(records)):
-                        if condition.evaluate(col_1, records[i
-                        ][col_2]):
+                        if condition.evaluate(col_1, records[i][col_2]):
                             temp_rec.append(records[i])
                 else:  # Either col_2 string or integer
                     for i in range(len(records)):
@@ -150,7 +155,8 @@ class StorageManager:
 
         :param table_name: The name of the table to delete.
         """
-        pass
+        if table_name not in self.tables:
+            raise ValueError(f"Table {table_name} not found.")
 
     def delete_table_record(self, table_name: str, condition: Condition) -> int:
         # TODO: delete_table_record
@@ -162,7 +168,8 @@ class StorageManager:
         :param Condition: The condition of delete.
         :return: numbers of records effected
         """
-        pass
+        if table_name not in self.tables:
+            raise ValueError(f"Table {table_name} not found.")
 
         return 0
 
@@ -252,33 +259,36 @@ class StorageManager:
         """
         self.information_schema.write_table([(table_name,)])
 
-    def set_index(self, table: str, column: str, index_type: str) -> None:
+    def set_index(self, table_name: str, column: str, index_type: str) -> None:
         """
         Create an index on a specified column of a table.
 
-        :param table: The name of the table.
+        :param table_name: The name of the table.
         :param column: The column to index.
         :param index_type: The type of index (baru hash).
         :raises ValueError: If the index type is unsupported.
         """
+        if table_name not in self.tables:
+            raise ValueError(f"{table_name} not in database")
+
         if index_type != "hash":
             raise ValueError("Unsupported index type. Only 'hash' is implemented.")
 
-        schema = self.get_table_schema(table)
+        schema = self.get_table_schema(table_name)
         metadata = schema.get_metadata()
         # records = self.get_table_data(table)
         attrCount = -1
         dtype = "null"
-        for i in range (len(metadata)) :
-            if metadata[i][0] == column :
-                attrCount = i 
+        for i in range(len(metadata)):
+            if metadata[i][0] == column:
+                attrCount = i
                 dtype = metadata[i][1]
 
-        if (attrCount == -1) :
+        if attrCount == -1:
             raise Exception("There is no such column!")
 
         self.index = HashIndex()
-        tfm = TableFileManager(table, schema)
+        tfm = TableFileManager(table_name, schema)
         # records: List[Tuple[Any, ...]] = []
         current_block = 0
 
@@ -287,7 +297,7 @@ class StorageManager:
             offset = 0
 
             if current_block == 0:
-                header_length = int.from_bytes(block.data[4:8], byteorder='little')
+                header_length = int.from_bytes(block.data[4:8], byteorder="little")
                 offset = header_length
 
             while offset < block.header["free_space_offset"]:
@@ -302,27 +312,42 @@ class StorageManager:
 
                 record = tfm.serializer.deserialize(record_bytes)
                 # records.append(record)
-                
+
                 print("isi record : ")
                 print(record)
                 # record = tfm.serializer.serialize(record)
                 if dtype == "int":
-                    key = int(hashlib.sha256(int(record[attrCount]).to_bytes()).hexdigest(), 16) % (2**32)
+                    key = int(
+                        hashlib.sha256(int(record[attrCount]).to_bytes()).hexdigest(),
+                        16,
+                    ) % (2**32)
                 elif dtype == "float":
-                    key = int(hashlib.sha256(struct.pack('f', float(record[attrCount]))).hexdigest(), 16) % (2**32)
+                    key = int(
+                        hashlib.sha256(
+                            struct.pack("f", float(record[attrCount]))
+                        ).hexdigest(),
+                        16,
+                    ) % (2**32)
                 elif dtype == "char":
-                    key = int(hashlib.sha256(str(record[attrCount]).encode('utf-8')).hexdigest(), 16) % (2**32)
+                    key = int(
+                        hashlib.sha256(
+                            str(record[attrCount]).encode("utf-8")
+                        ).hexdigest(),
+                        16,
+                    ) % (2**32)
                 elif dtype == "varchar":
-                    key = int(hashlib.sha256(str(record[attrCount]).encode('utf-8')).hexdigest(), 16) % (2**32)
+                    key = int(
+                        hashlib.sha256(
+                            str(record[attrCount]).encode("utf-8")
+                        ).hexdigest(),
+                        16,
+                    ) % (2**32)
                 # key = int(hashlib.sha256(record[attrCount]).hexdigest(), 16) % (2**32)
                 self.index.add(key, (current_block, offset))
 
             current_block += 1
 
-        path = table + "-" + column + "-hash" + ".pickle"
+        path = table_name + "-" + column + "-hash" + ".pickle"
 
         with open(path, "wb") as file:  # Open in binary write mode
             pickle.dump(self.index, file)
-
-sm = StorageManager("./storage")
-sm.set_index("coba", "nilai", "hash")
