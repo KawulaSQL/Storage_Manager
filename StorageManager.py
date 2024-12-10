@@ -1,3 +1,4 @@
+import os
 from typing import List, Tuple, Dict, Any
 import json
 import math
@@ -149,7 +150,6 @@ class StorageManager:
         self.tables[table_name].write_table(values)
 
     def delete_table(self, table_name: str) -> None:
-        # TODO: delete_table
         """
         Deletes a table from the storage.
 
@@ -158,20 +158,52 @@ class StorageManager:
         if table_name not in self.tables:
             raise ValueError(f"Table {table_name} not found.")
 
+        # remove table from information_schema
+        self.delete_table_record(
+            "information_schema", Condition("table_name", "=", f"'{table_name}'")
+        )
+
+        # delete table file manager
+        self.tables.pop(table_name)
+
+        # remove table from storage
+        table_file = f"{self.base_path}/{table_name}_table.bin"
+        try:
+            os.remove(table_file)
+            print("Table deleted successfully.")
+        except FileNotFoundError:
+            raise ValueError(f"Table {table_name} not found.")
+
     def delete_table_record(self, table_name: str, condition: Condition) -> int:
-        # TODO: delete_table_record
         """
         Deletes records from a table based on a condition.
 
-        :param condition:
+        :param condition: The condition of delete.
         :param table_name: The name of the table to delete records from.
-        :param Condition: The condition of delete.
         :return: numbers of records effected
         """
         if table_name not in self.tables:
             raise ValueError(f"Table {table_name} not found.")
 
-        return 0
+        col_names = [col[0] for col in self.get_table_schema(table_name).get_metadata()]
+        print(col_names)
+
+        if condition.operand1["isAttribute"]:
+            if condition.operand1["value"] not in col_names:
+                raise ValueError(f"Column {condition.operand1['value']} not found.")
+            col_1 = col_names.index(condition.operand1["value"])
+
+            if condition.operand2["isAttribute"]:
+                if condition.operand2["value"] not in col_names:
+                    raise ValueError(f"Column {condition.operand2['value']} not found.")
+                col_2 = col_names.index(condition.operand1["value"])
+            else:
+                col_2 = condition.operand2
+
+            return self.tables[table_name].delete_record(col_1, col_2, condition)
+
+        else:
+            raise ValueError(f"Column {condition.operand1['value']} not found.")
 
     def get_table_schema(self, table_name):
         """
@@ -351,3 +383,21 @@ class StorageManager:
 
         with open(path, "wb") as file:  # Open in binary write mode
             pickle.dump(self.index, file)
+
+
+# if __name__ == "__main__":
+#     storage = StorageManager("storage")
+#     storage.create_table("test", Schema([Attribute("id", "int", None), Attribute("name", "varchar", 50)]))
+#     storage.insert_into_table("test", [(1, "Alice"), (2, "Bob"), (3, "Charlie"), (4, "David"), (5, "Eve")])
+#
+#     print(storage.get_table_data("test"))
+#
+#     storage.delete_table("test")
+#     # storage.delete_table_record("test", Condition("id", "=", "2"))
+#
+#     try:
+#         print(storage.get_table_data("test"))
+#     except ValueError as e:
+#         print(e)
+#
+#     print(storage.list_tables())
