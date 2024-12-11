@@ -1,3 +1,5 @@
+# StorageManager.py
+
 import os
 from typing import List, Tuple, Dict, Any
 import json
@@ -196,7 +198,6 @@ class StorageManager:
             raise ValueError(f"Table {table_name} not found.")
 
         col_names = [col[0] for col in self.get_table_schema(table_name).get_metadata()]
-        print(col_names)
 
         if condition.operand1["isAttribute"]:
             if condition.operand1["value"] not in col_names:

@@ -1,3 +1,5 @@
+# TableFileManager.py
+
 import os
 from typing import List, Tuple, Any
 
@@ -195,15 +197,32 @@ class TableFileManager:
         return records
 
     def delete_record(self, col_1_index: int, col_2: int | dict[str, Any], condition: Condition) -> int:
-        current_block = 0
+        """
+        Delete records that match the specified condition within the existing blocks.
+
+        :param col_1_index: Index of the first column to check in the condition
+        :param col_2: Index of the second column or a dictionary with value and type
+        :param condition: Condition to evaluate for deleting records
+        :return: Number of rows deleted
+        """
         rows_effected = 0
+        current_block = 0
+
+        rewrite_block = Block()
+        rewrite_block_num = -1
+
+        first_block = Block.read_block(self.file_path, 0)
+        header_length = int.from_bytes(first_block.data[4:8], byteorder='little')
+        rewrite_block.add_record(first_block.data[0:header_length])
 
         while current_block < self.block_count:
             block = Block.read_block(self.file_path, current_block)
+            block.init_cursor()
             offset = 0
 
             if current_block == 0:
                 header_length = int.from_bytes(block.data[4:8], byteorder='little')
+                block.cursor = header_length
                 offset = header_length
 
             while offset < block.header["free_space_offset"]:
@@ -212,27 +231,48 @@ class TableFileManager:
                 while block.data[offset] != 0xCC:
                     record_bytes.append(block.data[offset])
                     offset += 1
-
                 record_bytes.append(block.data[offset])
                 offset += 1
 
                 record = self.serializer.deserialize(record_bytes)
-                print(record)
 
+                should_delete = False
                 if condition.operand2["isAttribute"]:
-                    # col 2 is attribute
                     if condition.evaluate(record[col_1_index], record[col_2]):
-                        # delete record
-                        print(f"record to delete: {record}")
-                        rows_effected += 1
-
-                else:  # col 2 is value
+                        should_delete = True
+                else:
                     if condition.evaluate(record[col_1_index], col_2['value']):
-                        # delete record
-                        print(f"record to delete: {record}")
-                        rows_effected += 1
+                        should_delete = True
+
+                if (rewrite_block_num == -1 and should_delete) :
+                    rewrite_block_num = current_block
+                    if current_block != 0:
+                        header_length = int.from_bytes(block.data[4:8], byteorder='little')
+                        rewrite_block.data[0:len(rewrite_block.data) - header_length] = rewrite_block.data[header_length:]
+                        rewrite_block.header["free_space_offset"] -= header_length
+
+                if not should_delete:
+                    serialized_record = self.serializer.serialize(record)
+                    
+                    if rewrite_block.capacity() < len(serialized_record):
+                        rewrite_block.write_block(self.file_path, rewrite_block_num)
+                        
+                        rewrite_block = Block()
+                        rewrite_block_num += 1
+
+                    rewrite_block.add_record(serialized_record)
+                else:
+                    rows_effected += 1
 
             current_block += 1
+
+        if rewrite_block.header["record_count"] > 0:
+            rewrite_block.write_block(self.file_path, rewrite_block_num)
+
+        self.block_count = rewrite_block_num + 1
+        self.record_count -= rows_effected
+
+        self._update_header()
 
         return rows_effected
     

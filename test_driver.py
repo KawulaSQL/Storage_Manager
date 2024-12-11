@@ -191,6 +191,30 @@ class TestDriver:
             return float(value)
         except ValueError:
             return value
+        
+    def parse_delete(self, statement: str) -> None:
+        """Parse DELETE FROM table_name WHERE condition statement."""
+        delete_match = re.search(r"DELETE FROM\s+(\w+)\s+WHERE\s+(.+)", statement, re.IGNORECASE)
+        
+        if not delete_match:
+            print("Error: Invalid DELETE statement.")
+            return
+
+        table_name = delete_match.group(1)
+        where_clause = delete_match.group(2)
+
+        where_parts = where_clause.split()
+        if len(where_parts) != 3:
+            print("Error: Invalid WHERE clause.")
+            return
+
+        try:
+            condition = Condition(where_parts[0], where_parts[1], where_parts[2])
+            
+            rows_affected = self.storage_manager.delete_table_record(table_name, condition)
+            print(f"{rows_affected} row(s) deleted from '{table_name}'.")
+        except ValueError as e:
+            print(f"Error: {e}")
 
     def run(self) -> None:
         """Run the CLI driver."""
@@ -215,6 +239,9 @@ class TestDriver:
 
             elif statement.lower().startswith("update"):
                 self.parse_update(statement)
+
+            elif statement.lower().startswith("delete from"):
+                self.parse_delete(statement)
 
             else:
                 print("Error: Unsupported KWL statement.")
