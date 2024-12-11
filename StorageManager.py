@@ -146,10 +146,6 @@ class StorageManager:
 
         return records
 
-    def update_table_record(self, table_name: str, condition: Condition) -> int:
-        # TODO: update_table_record, NOTE FUNGSI INI BAKAL DIUBAH LAGI PARAMETER/NAMANYA
-        pass
-
     def insert_into_table(self, table_name: str, values: List[Tuple[Any, ...]]) -> None:
         """
         Insert tuples of data into the specified table.
@@ -262,46 +258,7 @@ class StorageManager:
                 stats[table_name] = table_stats
 
         return json.dumps(stats, indent=4)
-
-    def write_buffer(self):
-        # TODO: write buffer add params
-        """
-        Writes buffer to disk with the given identifier.
-
-        :param identifier: block identifier for file name.
-        """
-        pass
-
-    def read_buffer(self):
-        # TODO: read buffer add params
-        """
-        Reads buffer from disk with the given identifier.
-        """
-        pass
-
-    # ===== Private Methods ===== #
-
-    def __initialize_information_schema(self) -> None:
-        """
-        Initialize or load the information_schema table that holds table names.
-        """
-        schema = Schema([Attribute("table_name", "varchar", 50)])
-        self.information_schema = TableFileManager("information_schema", schema)
-        self.tables["information_schema"] = self.information_schema
-
-        table_names = self.get_table_data("information_schema")
-        for table_name in table_names:
-            table_name = table_name[0]
-            self.tables[table_name] = TableFileManager(table_name)
-
-    def __add_table_to_information_schema(self, table_name: str) -> None:
-        """
-        Adds a table name to the information_schema table.
-
-        :param table_name: Name of the table to add.
-        """
-        self.information_schema.write_table([(table_name,)])
-
+    
     def set_index(self, table_name: str, column: str, index_type: str) -> None:
         """
         Create an index on a specified column of a table.
@@ -442,9 +399,6 @@ class StorageManager:
             print("record : ", record)
         
         return result
-        
-# sm = StorageManager("./storage")
-# sm.set_index("coba", "nilai", "hash")
 
     def update_table(self, table_name: str, condition: Condition, update_values: dict):
         """Update records in a table based on a condition."""
@@ -474,19 +428,25 @@ class StorageManager:
         return table_file_manager.update_record(col_1_index, col_2, condition, update_values)
 
 
-# if __name__ == "__main__":
-#     storage = StorageManager("storage")
-#     storage.create_table("test", Schema([Attribute("id", "int", None), Attribute("name", "varchar", 50)]))
-#     storage.insert_into_table("test", [(1, "Alice"), (2, "Bob"), (3, "Charlie"), (4, "David"), (5, "Eve")])
-#
-#     print(storage.get_table_data("test"))
-#
-#     storage.delete_table("test")
-#     # storage.delete_table_record("test", Condition("id", "=", "2"))
-#
-#     try:
-#         print(storage.get_table_data("test"))
-#     except ValueError as e:
-#         print(e)
-#
-#     print(storage.list_tables())
+    # ===== Private Methods ===== #
+
+    def __initialize_information_schema(self) -> None:
+        """
+        Initialize or load the information_schema table that holds table names.
+        """
+        schema = Schema([Attribute("table_name", "varchar", 50)])
+        self.information_schema = TableFileManager("information_schema", schema)
+        self.tables["information_schema"] = self.information_schema
+
+        table_names = self.get_table_data("information_schema")
+        for table_name in table_names:
+            table_name = table_name[0]
+            self.tables[table_name] = TableFileManager(table_name)
+
+    def __add_table_to_information_schema(self, table_name: str) -> None:
+        """
+        Adds a table name to the information_schema table.
+
+        :param table_name: Name of the table to add.
+        """
+        self.information_schema.write_table([(table_name,)])
