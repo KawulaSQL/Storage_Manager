@@ -104,8 +104,7 @@ class StorageManager:
             # print(condition.operand1, condition.operand2) # testing purposes
 
             
-            if condition.operand1["type"] != condition.operand2["type"] and not ((condition.operand1["type"] != "int" and condition.operand2["type"] != "float") or (condition.operand1["type"] != "float" and condition.operand2["type"] != "int")):
-                # print(not ((condition.operand1["type"] != "int" and condition.operand2["type"] != "float") or (condition.operand1["type"] != "float" and condition.operand2["type"] != "int")))
+            if condition.operand1["type"] != condition.operand2["type"] and condition.operand1["type"] not in ["int", "float"] and condition.operand2["type"] not in ["int", "float"]:
                 raise ValueError(f"TypeError: {condition.operand1['type']} with {condition.operand2['type']}")
 
             temp_rec = []
