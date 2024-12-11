@@ -259,6 +259,18 @@ class StorageManager:
 
         return json.dumps(stats, indent=4)
     
+    def update_index(self, table_name: str) -> None:
+        if table_name not in self.tables:
+                raise ValueError(f"{table_name} not in database")
+            
+        schema = self.get_table_schema(table_name)
+        metadata = schema.get_metadata()
+
+        for i in range(len(metadata)):
+            file_path = os.path.join("./storage", f"{table_name}-{metadata[i][0]}-hash.pickle")
+            if ((os.path.isfile(file_path))) :
+                self.set_index(table_name, metadata[i][0], "hash")
+    
     def set_index(self, table_name: str, column: str, index_type: str) -> None:
         """
         Create an index on a specified column of a table.
