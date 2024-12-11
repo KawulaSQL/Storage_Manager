@@ -68,23 +68,20 @@ class StorageManager:
 
         self.__add_table_to_information_schema(table_name)
 
-    def get_table_data(
-        self, table_name: str, condition: Condition | None = None
-    ) -> List[Tuple[Any, ...]]:
+    def get_table_data(self, table_name: str, condition: Condition | None = None, projection: List[str] = []) -> List[Tuple[Any, ...]]:
         """
         Retrieves all records from a specified table.
 
         :param condition: Condition
         :param table_name: The name of the table to fetch data from.
+        :param projection: The name of columns selected to be displayed.
         :return: A list of tuples containing the table records.
         """
         if table_name not in self.tables:
             raise ValueError(f"Table {table_name} not found.")
 
         records = self.tables[table_name].read_table()
-        attributes = [
-            col[0] for col in self.get_table_schema(table_name).get_metadata()
-        ]
+        attributes = [col[0] for col in self.get_table_schema(table_name).get_metadata()]
         types = [col[1] for col in self.get_table_schema(table_name).get_metadata()]
 
         if condition and table_name != "information_schema":
@@ -109,9 +106,7 @@ class StorageManager:
             
             if condition.operand1["type"] != condition.operand2["type"] and not ((condition.operand1["type"] != "int" and condition.operand2["type"] != "float") or (condition.operand1["type"] != "float" and condition.operand2["type"] != "int")):
                 # print(not ((condition.operand1["type"] != "int" and condition.operand2["type"] != "float") or (condition.operand1["type"] != "float" and condition.operand2["type"] != "int")))
-                raise ValueError(
-                    f"TypeError: {condition.operand1['type']} with {condition.operand2['type']}"
-                )
+                raise ValueError(f"TypeError: {condition.operand1['type']} with {condition.operand2['type']}")
 
             temp_rec = []
             if condition.operand1["isAttribute"]:
@@ -120,16 +115,16 @@ class StorageManager:
                         if condition.evaluate(records[i][col_1], records[i][col_2]):
                             temp_rec.append(records[i])
 
-                else:  # Either col_2 string or integer
+                else:  # col 2 is not a reference to an attribute
                     is_indexed = self.get_index(table_name, condition.operand1["value"], condition.operand2["value"], condition.operand2["type"])
                     print("is_indexed = ", is_indexed) 
                     if (is_indexed == None) :
                         for i in range(len(records)):
                             if condition.evaluate(records[i][col_1], col_2):
                                 temp_rec.append(records[i])
-                    else :
+                    else:
                         temp_rec = is_indexed
-            else:  # Either col_1 string or integer
+            else:  # col 1 is not a reference to an attribute
                 if condition.operand2["isAttribute"]:
                     is_indexed = self.get_index(table_name, condition.operand2["value"], condition.operand1["value"], condition.operand1["type"])
                     print("is_indexed = ", is_indexed) 
@@ -137,13 +132,26 @@ class StorageManager:
                         for i in range(len(records)):
                             if condition.evaluate(col_1, records[i][col_2]):
                                 temp_rec.append(records[i])
-                    else :
+                    else:
                         temp_rec = is_indexed
-                else:  # Either col_2 string or integer
+                else:  # col 2 is not a reference to an attribute
                     for i in range(len(records)):
                         if condition.evaluate(col_1, col_2):
                             temp_rec.append(records[i])
             records = temp_rec
+        
+        if len(projection) > 0 and table_name != "information_schema":
+            for att in projection:
+                if att not in attributes:
+                    raise ValueError(f"The column {att} is not in {table_name}")
+            
+            filtered_records = []
+            for i in range(len(records)):
+                record_holder = []
+                for att in projection:
+                    record_holder.append(records[i][attributes.index(att)])
+                filtered_records.append(tuple(record_holder))
+            records = filtered_records
 
         return records
 
