@@ -265,7 +265,7 @@ class StorageManager:
 
                 stats[table_name] = table_stats
 
-        return json.dumps(stats, indent=4)
+        return stats
     
     def update_index(self, table_name: str) -> None:
         if table_name not in self.tables:
