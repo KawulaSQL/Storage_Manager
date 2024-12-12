@@ -9,10 +9,6 @@
         <td>Nama</td>
       </tr>
       <tr>
-        <td>13521028</td>
-        <td>M Zulfiansyah Bayu Pratama </td>
-      </tr>
-      <tr>
         <td>13522049</td>
         <td>Vanson Kurnialim</td>
       </tr>
