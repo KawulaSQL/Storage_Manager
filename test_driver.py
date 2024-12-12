@@ -85,7 +85,7 @@ class TestDriver:
                 filtered_row = [row[all_columns.index(col)] for col in column_names]
                 print(row_format.format(*filtered_row))
             
-            # print(self.storage_manager.get_stats()) # testing purposes
+            print(self.storage_manager.get_stats()) # testing purposes
         except ValueError as e:
             print(e)
 
