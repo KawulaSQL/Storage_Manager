@@ -1,8 +1,4 @@
-# StorageManager.py
-
-import os
 from typing import List, Tuple, Dict, Any
-import json
 import math
 
 from lib import Block
@@ -17,6 +13,7 @@ import hashlib
 import pickle
 import struct
 import os
+
 
 class StorageManager:
     """
@@ -36,22 +33,9 @@ class StorageManager:
         self.information_schema: TableFileManager
         self.tables: Dict[str, TableFileManager] = {}
 
-        self._initialize_information_schema()
+        self.__initialize_information_schema()
 
-        self.index: HashIndex
-
-    def _initialize_information_schema(self) -> None:
-        """
-        Initialize or load the information_schema table that holds table names.
-        """
-        schema = Schema([Attribute("table_name", "varchar", 50)])
-        self.information_schema = TableFileManager("information_schema", schema)
-        self.tables["information_schema"] = self.information_schema
-
-        table_names = self.get_table_data("information_schema")
-        for table_name in table_names:
-            table_name = table_name[0]
-            self.tables[table_name] = TableFileManager(table_name)
+        self.index: HashIndex | None = None
 
     def create_table(self, table_name: str, schema: Schema) -> None:
         """
@@ -68,7 +52,8 @@ class StorageManager:
 
         self.__add_table_to_information_schema(table_name)
 
-    def get_table_data(self, table_name: str, condition: Condition | None = None, projection: List[str] = []) -> List[Tuple[Any, ...]]:
+    def get_table_data(self, table_name: str, condition: Condition | None = None,
+                       projection=None) -> List[Tuple[Any, ...]]:
         """
         Retrieves all records from a specified table.
 
@@ -77,6 +62,8 @@ class StorageManager:
         :param projection: The name of columns selected to be displayed.
         :return: A list of tuples containing the table records.
         """
+        if projection is None:
+            projection = []
         if table_name not in self.tables:
             raise ValueError(f"Table {table_name} not found.")
 
@@ -103,8 +90,9 @@ class StorageManager:
 
             # print(condition.operand1, condition.operand2) # testing purposes
 
-            
-            if condition.operand1["type"] != condition.operand2["type"] and condition.operand1["type"] not in ["int", "float"] and condition.operand2["type"] not in ["int", "float"]:
+            if condition.operand1["type"] != condition.operand2["type"] and condition.operand1["type"] not in ["int",
+                                                                                                               "float"] and \
+                    condition.operand2["type"] not in ["int", "float"]:
                 raise ValueError(f"TypeError: {condition.operand1['type']} with {condition.operand2['type']}")
 
             temp_rec = []
@@ -115,9 +103,10 @@ class StorageManager:
                             temp_rec.append(records[i])
 
                 else:  # col 2 is not a reference to an attribute
-                    is_indexed = self.get_index(table_name, condition.operand1["value"], condition.operand2["value"], condition.operand2["type"])
-                    print("is_indexed = ", is_indexed) 
-                    if (is_indexed == None) :
+                    is_indexed = self.get_index(table_name, condition.operand1["value"], condition.operand2["value"],
+                                                condition.operand2["type"])
+                    print("is_indexed = ", is_indexed)
+                    if is_indexed is None:
                         for i in range(len(records)):
                             if condition.evaluate(records[i][col_1], col_2):
                                 temp_rec.append(records[i])
@@ -125,9 +114,10 @@ class StorageManager:
                         temp_rec = is_indexed
             else:  # col 1 is not a reference to an attribute
                 if condition.operand2["isAttribute"]:
-                    is_indexed = self.get_index(table_name, condition.operand2["value"], condition.operand1["value"], condition.operand1["type"])
-                    print("is_indexed = ", is_indexed) 
-                    if (is_indexed == None) :
+                    is_indexed = self.get_index(table_name, condition.operand2["value"], condition.operand1["value"],
+                                                condition.operand1["type"])
+                    print("is_indexed = ", is_indexed)
+                    if is_indexed is None:
                         for i in range(len(records)):
                             if condition.evaluate(col_1, records[i][col_2]):
                                 temp_rec.append(records[i])
@@ -138,12 +128,12 @@ class StorageManager:
                         if condition.evaluate(col_1, col_2):
                             temp_rec.append(records[i])
             records = temp_rec
-        
+
         if len(projection) > 0 and table_name != "information_schema":
             for att in projection:
                 if att not in attributes:
                     raise ValueError(f"The column {att} is not in {table_name}")
-            
+
             filtered_records = []
             for i in range(len(records)):
                 record_holder = []
@@ -154,7 +144,7 @@ class StorageManager:
 
         return records
 
-    def insert_into_table(self, table_name: str, values: List[Tuple[Any, ...]]) -> None:
+    def insert_into_table(self, table_name: str, values: List[Tuple[Any, ...]]) -> int:
         """
         Insert tuples of data into the specified table.
 
@@ -164,6 +154,8 @@ class StorageManager:
         if table_name not in self.tables:
             raise ValueError(f"{table_name} not in database")
         self.tables[table_name].write_table(values)
+
+        return len(values)
 
     def delete_table(self, table_name: str) -> None:
         """
@@ -220,7 +212,34 @@ class StorageManager:
         else:
             raise ValueError(f"Column {condition.operand1['value']} not found.")
 
-    def get_table_schema(self, table_name):
+    def update_table(self, table_name: str, condition: Condition, update_values: dict) -> int:
+        """Update records in a table based on a condition."""
+        table_file_manager = self.tables[table_name]
+
+        schema = table_file_manager.schema
+        col_1_index = next(
+            (i for i, attr in enumerate(schema.attributes)
+             if attr.name == condition.operand1['value']),
+            None
+        )
+
+        if col_1_index is None:
+            raise ValueError(f"Column {condition.operand1['value']} not found in table")
+
+        if condition.operand2['isAttribute']:
+            col_2 = next(
+                (i for i, attr in enumerate(schema.attributes)
+                 if attr.name == condition.operand2['value']),
+                None
+            )
+            if col_2 is None:
+                raise ValueError(f"Column {condition.operand2['value']} not found in table")
+        else:
+            col_2 = condition.operand2
+
+        return table_file_manager.update_record(col_1_index, col_2, condition, update_values)
+
+    def get_table_schema(self, table_name) -> Schema:
         """
         Retrieves the schema of a specified table.
 
@@ -239,16 +258,16 @@ class StorageManager:
         table_data = self.get_table_data("information_schema")
         return [table[0] for table in table_data]
 
-    def get_stats(self) -> str:
+    def get_stats(self) -> dict[str, dict[str, int | Any]]:
         """
         Gets the statistic of every table in a storage.
 
         A table statistic consists of:
-        nr: number of tuples in a relation r.
-        br: number of blocks containing tuples of r.
-        lr: size of tuple of r.
-        fr: blocking factor of r - i.e., the number of tuples of r that fit into one block.
-        V(A,r): number of distinct values that appear in r for attribute A; same as the size of A(r).
+        n_r: number of tuples in a relation r.
+        b_r: number of blocks containing tuples of r.
+        l_r: size of tuple of r.
+        f_r: blocking factor of r - i.e., the number of tuples of r that fit into one block.
+        v_a_r: number of distinct values that appear in r for attribute A; same as the size of A(r).
 
         :return: A JSON structured of key(table name) -> value(table statistic).
         """
@@ -266,19 +285,19 @@ class StorageManager:
                 stats[table_name] = table_stats
 
         return stats
-    
+
     def update_index(self, table_name: str) -> None:
         if table_name not in self.tables:
-                raise ValueError(f"{table_name} not in database")
-            
+            raise ValueError(f"{table_name} not in database")
+
         schema = self.get_table_schema(table_name)
         metadata = schema.get_metadata()
 
         for i in range(len(metadata)):
             file_path = os.path.join("./storage", f"{table_name}-{metadata[i][0]}-hash.pickle")
-            if ((os.path.isfile(file_path))) :
+            if os.path.isfile(file_path):
                 self.set_index(table_name, metadata[i][0], "hash")
-    
+
     def set_index(self, table_name: str, column: str, index_type: str) -> None:
         """
         Create an index on a specified column of a table.
@@ -297,14 +316,14 @@ class StorageManager:
         schema = self.get_table_schema(table_name)
         metadata = schema.get_metadata()
         # records = self.get_table_data(table)
-        attrCount = -1
+        attr_count = -1
         dtype = "null"
         for i in range(len(metadata)):
             if metadata[i][0] == column:
-                attrCount = i
+                attr_count = i
                 dtype = metadata[i][1]
 
-        if attrCount == -1:
+        if attr_count == -1:
             raise Exception("There is no such column!")
 
         self.index = HashIndex()
@@ -339,31 +358,34 @@ class StorageManager:
                 # record = tfm.serializer.serialize(record)
                 if dtype == "int":
                     key = int(
-                        hashlib.sha256(int(record[attrCount]).to_bytes()).hexdigest(),
+                        hashlib.sha256(int(record[attr_count]).to_bytes()).hexdigest(),
                         16,
-                    ) % (2**32)
+                    ) % (2 ** 32)
                 elif dtype == "float":
                     key = int(
                         hashlib.sha256(
-                            struct.pack("f", float(record[attrCount]))
+                            struct.pack("f", float(record[attr_count]))
                         ).hexdigest(),
                         16,
-                    ) % (2**32)
+                    ) % (2 ** 32)
                 elif dtype == "char":
                     key = int(
                         hashlib.sha256(
-                            str(record[attrCount]).encode("utf-8")
+                            str(record[attr_count]).encode("utf-8")
                         ).hexdigest(),
                         16,
-                    ) % (2**32)
+                    ) % (2 ** 32)
                 elif dtype == "varchar":
                     key = int(
                         hashlib.sha256(
-                            str(record[attrCount]).encode("utf-8")
+                            str(record[attr_count]).encode("utf-8")
                         ).hexdigest(),
                         16,
-                    ) % (2**32)
-                # key = int(hashlib.sha256(record[attrCount]).hexdigest(), 16) % (2**32)
+                    ) % (2 ** 32)
+                else:
+                    raise ValueError("Unsupported Data Type")
+
+                # key = int(hashlib.sha256(record[attr_count]).hexdigest(), 16) % (2**32)
                 self.index.add(key, (current_block, offset_note))
 
             current_block += 1
@@ -374,42 +396,44 @@ class StorageManager:
         with open(path, "wb") as file:  # Open in binary write mode
             pickle.dump(self.index, file)
 
-    def get_index(self, table: str, column: str, value: str | int | float, dtype: str) :
+    def get_index(self, table_name: str, column: str, value: str | int | float, dtype: str):
         print("masuk getIndex")
-        file_path = os.path.join("./storage", f"{table}-{column}-hash.pickle")
-        if (not (os.path.isfile(file_path))) :
-            return None 
-        
+        file_path = os.path.join("./storage", f"{table_name}-{column}-hash.pickle")
+        if not (os.path.isfile(file_path)):
+            return None
+
         with open(file_path, "rb") as file:  # Open in binary read mode
             self.index = pickle.load(file)
-        
+
         if dtype == "int":
-            key = int(hashlib.sha256(int(value).to_bytes()).hexdigest(), 16) % (2**32)
+            key = int(hashlib.sha256(int(value).to_bytes()).hexdigest(), 16) % (2 ** 32)
         elif dtype == "float":
-            key = int(hashlib.sha256(struct.pack('f', float(value))).hexdigest(), 16) % (2**32)
+            key = int(hashlib.sha256(struct.pack('f', float(value))).hexdigest(), 16) % (2 ** 32)
         elif dtype == "char":
-            key = int(hashlib.sha256(str(value).encode('utf-8')).hexdigest(), 16) % (2**32)
+            key = int(hashlib.sha256(str(value).encode('utf-8')).hexdigest(), 16) % (2 ** 32)
         elif dtype == "varchar":
-            key = int(hashlib.sha256(str(value).encode('utf-8')).hexdigest(), 16) % (2**32)
-        
+            key = int(hashlib.sha256(str(value).encode('utf-8')).hexdigest(), 16) % (2 ** 32)
+        else:
+            raise ValueError("Unsupported Data Type")
+
         index_result = self.index.find(key)
-        print("index_result : ", index_result) 
-        
-        schema = self.get_table_schema(table)
+        print("index_result : ", index_result)
+
+        schema = self.get_table_schema(table_name)
         metadata = schema.get_metadata()
-        attrCount = -1
+        attr_count = -1
         for i in range(len(metadata)):
             if metadata[i][0] == column:
-                attrCount = i
+                attr_count = i
 
-        tfm = TableFileManager(table, schema)
+        tfm = TableFileManager(table_name, schema)
 
         result = []
-        for i in range(len(index_result)) :
+        for i in range(len(index_result)):
             current_block = index_result[i][0]
             offset = index_result[i][1]
             block = Block.read_block(tfm.file_path, current_block)
-            
+
             record_bytes = bytearray()
 
             while block.data[offset] != 0xCC:
@@ -420,38 +444,11 @@ class StorageManager:
 
             record = tfm.serializer.deserialize(record_bytes)
 
-            if (record[attrCount] == value) :
+            if record[attr_count] == value:
                 result.append(record)
             print("record : ", record)
-        
-        return result
 
-    def update_table(self, table_name: str, condition: Condition, update_values: dict):
-        """Update records in a table based on a condition."""
-        table_file_manager = self.tables[table_name]
-        
-        schema = table_file_manager.schema
-        col_1_index = next(
-            (i for i, attr in enumerate(schema.attributes) 
-            if attr.name == condition.operand1['value']), 
-            None
-        )
-        
-        if col_1_index is None:
-            raise ValueError(f"Column {condition.operand1['value']} not found in table")
-        
-        if condition.operand2['isAttribute']:
-            col_2 = next(
-                (i for i, attr in enumerate(schema.attributes) 
-                if attr.name == condition.operand2['value']), 
-                None
-            )
-            if col_2 is None:
-                raise ValueError(f"Column {condition.operand2['value']} not found in table")
-        else:
-            col_2 = condition.operand2
-        
-        return table_file_manager.update_record(col_1_index, col_2, condition, update_values)
+        return result
 
     # ===== Private Methods ===== #
 

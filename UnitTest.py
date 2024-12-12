@@ -67,10 +67,22 @@ class TestStorageManager(unittest.TestCase):
         Test creating a new table and verifying its existence.
         """
         table_name = self.generate_unique_table_name("test_table")
-        schema = Schema([Attribute("id", "int", 4), Attribute("name", "varchar", 50)])
+        schema = Schema([Attribute("id", "int"), Attribute("name", "varchar", 50), Attribute("score", "float"), Attribute("grade", "char")])
         self.storage_manager.create_table(table_name, schema)
+
+        # check if the table is created
         tables = self.storage_manager.list_tables()
         self.assertIn(table_name, tables)
+
+        # check if the file is created in the storage
+        table_file = os.path.join(self.TEST_BASE_PATH, f"{table_name}_table.bin")
+        self.assertTrue(
+            os.path.exists(table_file), f"Table file {table_file} should exist."
+        )
+
+        # verify the table scheme
+        table_schema = self.storage_manager.get_table_schema(table_name)
+        self.assertEqual(table_schema, schema)
 
     def test_insert_and_retrieve_data(self):
         """
