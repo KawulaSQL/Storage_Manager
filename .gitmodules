@@ -1,0 +1,3 @@
+[submodule "Failure_Recovery"]
+	path = Failure_Recovery
+	url = https://github.com/KawulaSQL/Failure_Recovery.git

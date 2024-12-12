@@ -1,5 +1,9 @@
 # TableFileManager.py
 
+import sys
+sys.path.append("./Failure_Recovery")
+from Failure_Recovery.FailureRecoveryManager import FailureRecoveryManager
+
 import os
 from typing import List, Tuple, Any
 
@@ -29,6 +33,8 @@ class TableFileManager:
         self.block_size: int = block_size
         self.file_path: str = f"{TableFileManager.base_path}/{table_name}_table.bin"
         self.schema: Schema = schema if schema else Schema([])
+
+        self.failure_recovery : FailureRecoveryManager = FailureRecoveryManager() # NANTI KALO UDAH INTEGRASI DIJADIIN PARAMETER TERUS DIPASS SAMA PROCESSOR, JADI FAILUREMANAGER NYA SAMA, GA BIKIN BARU
 
         if os.path.exists(self.file_path):
             self._read_header()
@@ -129,7 +135,9 @@ class TableFileManager:
         :raises ValueError: If a record cannot be serialized.
         """
         current_page = self.block_count - 1
-        block = Block.read_block(self.file_path, current_page)
+        block = self.get_buffer(self.table_name, current_page)
+        if (block == None) :
+            block = Block.read_block(self.file_path, current_page)
 
         for record in records:
             record_bytes = self.serializer.serialize(record)
@@ -146,6 +154,7 @@ class TableFileManager:
 
         if block.header["record_count"] > 0:
             block.write_block(self.file_path, current_page)
+            self.set_buffer(self.table_name, current_page, block)
 
         self.record_count += len(records)
         self._update_header()
@@ -172,7 +181,10 @@ class TableFileManager:
         current_block = 0
 
         while current_block < self.block_count:
-            block = Block.read_block(self.file_path, current_block)
+            block = self.get_buffer(self.table_name, current_block)
+            if (block == None) :
+                block = Block.read_block(self.file_path, current_block)
+                self.set_buffer(self.table_name, current_block, block)
             offset = 0
 
             if current_block == 0:
@@ -375,3 +387,8 @@ class TableFileManager:
         
         return attr_count
         
+    def get_buffer(self, table_name: str, block_num: int) -> Block :
+        return self.failure_recovery.buffer.get(table_name, block_num)
+
+    def set_buffer(self, table_name: str, block_num: int, block: Block) :
+        self.failure_recovery.buffer.set(table_name, block_num, block)

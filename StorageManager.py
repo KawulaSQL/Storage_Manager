@@ -389,7 +389,12 @@ class StorageManager:
         print("index_result : ", index_result) 
         
         schema = self.get_table_schema(table)
-        # metadata = schema.get_metadata()
+        metadata = schema.get_metadata()
+        attrCount = -1
+        for i in range(len(metadata)):
+            if metadata[i][0] == column:
+                attrCount = i
+
         tfm = TableFileManager(table, schema)
 
         result = []
@@ -408,7 +413,8 @@ class StorageManager:
 
             record = tfm.serializer.deserialize(record_bytes)
 
-            result.append(record)
+            if (record[attrCount] == value) :
+                result.append(record)
             print("record : ", record)
         
         return result
@@ -439,7 +445,6 @@ class StorageManager:
             col_2 = condition.operand2
         
         return table_file_manager.update_record(col_1_index, col_2, condition, update_values)
-
 
     # ===== Private Methods ===== #
 
