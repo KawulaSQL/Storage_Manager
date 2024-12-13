@@ -148,19 +148,13 @@ class TestDriver:
             if where_clause:
                 comparison_operators = ['<=', '>=', '!=', '==', '=', '<', '>']
                 
-                # Parse global condition
-                global_condition_match = re.findall(r"\w+\.\w+\s*(?:<=|>=|!=|==|=|<|>)\s*\S+", where_clause)
-                
-                # Parse global condition (if exists)
-                if global_condition_match:
-                    global_condition_str = global_condition_match[0]
-                    for op in comparison_operators:
-                        if op in global_condition_str:
-                            parts = global_condition_str.split(op)
-                            operand1 = parts[0].strip()
-                            operand2 = parts[1].strip()
-                            global_condition = Condition(operand1, op, operand2)
-                            break
+                for op in comparison_operators:
+                    if op in where_clause:
+                        parts = where_clause.split(op)
+                        operand1 = parts[0].strip()
+                        operand2 = parts[1].strip()
+                        global_condition = Condition(operand1, op, operand2)
+                        break
 
             # Perform table query (single table or joined)
             if len(tables) == 1:

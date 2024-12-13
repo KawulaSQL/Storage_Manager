@@ -20,7 +20,7 @@ class ExpressionParser:
         token_pattern = r'''
             (\d+(?:\.\d+)?)|
             ('[^']*')|
-            ([a-zA-Z_][a-zA-Z0-9_]*)|
+            ([a-zA-Z_.][a-zA-Z0-9_.]*)|
             ([+\-*/^%()])|
             (\s+)
         '''
@@ -48,7 +48,7 @@ class ExpressionParser:
     
     def is_attribute(self, token: str) -> bool:
         """Check if a token is an attribute/identifier."""
-        return re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', token) is not None
+        return re.match(r'^[a-zA-Z_.][a-zA-Z0-9_.]*$', token) is not None
     
     def parse_expression(self, expression: str, context: Dict[str, Union[int, float, str]] = None) -> List[str]:
         """
