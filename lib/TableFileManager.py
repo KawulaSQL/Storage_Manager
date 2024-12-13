@@ -29,6 +29,10 @@ class TableFileManager:
         :raises ValueError: If schema is not provided for a new table.
         """
         self.table_name: str = table_name
+
+        if (table_name[0] == "'" and table_name[-1] == "'") :
+            table_name = table_name[1:-1]
+
         self.block_size: int = block_size
         self.file_path: str = f"{TableFileManager.base_path}/{table_name}_table.bin"
         self.schema: Schema = schema if schema else Schema([])
@@ -65,9 +69,7 @@ class TableFileManager:
         :raises ValueError: If a record cannot be serialized.
         """
         current_page = self.block_count - 1
-        block = self.get_buffer(self.table_name, current_page)
-        if block is None:
-            block = Block.read_block(self.file_path, current_page)
+        block = self.__get_block(current_page)
 
         for record in records:
             record_bytes = self.serializer.serialize(record)
@@ -75,7 +77,7 @@ class TableFileManager:
             try:
                 block.add_record(record_bytes)
             except ValueError:
-                block.write_block(self.file_path, current_page)
+                self.set_buffer(self.table_name, current_page, block)
                 block = Block()
                 current_page += 1
                 self.block_count += 1
@@ -83,8 +85,7 @@ class TableFileManager:
                 block.add_record(record_bytes)
 
         if block.header["record_count"] > 0:
-            block.write_block(self.file_path, current_page)
-            self.set_buffer(self.table_name, current_page, block)
+            self.__set_block(current_page, block)
 
         self.record_count += len(records)
         self.__update_header()
@@ -100,10 +101,7 @@ class TableFileManager:
         current_block = 0
 
         while current_block < self.block_count:
-            block = self.get_buffer(self.table_name, current_block)
-            if block is None:
-                block = Block.read_block(self.file_path, current_block)
-                self.set_buffer(self.table_name, current_block, block)
+            block: Block = self.__get_block(current_block)
             offset = 0
 
             if current_block == 0:
@@ -140,14 +138,14 @@ class TableFileManager:
         rewrite_block = Block()
         rewrite_block_num = -1
 
-        first_block = Block.read_block(self.file_path, 0)
+        first_block = self.__get_block(0)
         header_length = int.from_bytes(first_block.data[4:8], byteorder='little')
         rewrite_block.add_record(first_block.data[0:header_length])
 
         attributes = [attr[0] for attr in self.schema.get_metadata()]
 
         while current_block < self.block_count:
-            block = Block.read_block(self.file_path, current_block)
+            block: Block = self.__get_block(current_block)
             block.init_cursor()
             offset = 0
 
@@ -188,7 +186,7 @@ class TableFileManager:
                     serialized_record = self.serializer.serialize(record)
 
                     if rewrite_block.capacity() < len(serialized_record):
-                        rewrite_block.write_block(self.file_path, rewrite_block_num)
+                        self.__set_block(rewrite_block_num, rewrite_block)
 
                         rewrite_block = Block()
                         rewrite_block_num += 1
@@ -200,8 +198,11 @@ class TableFileManager:
             current_block += 1
 
         if rewrite_block.header["record_count"] > 0:
-            rewrite_block.write_block(self.file_path, rewrite_block_num)
-            self.set_buffer(self.table_name, rewrite_block_num, rewrite_block)
+            self.__set_block(rewrite_block_num, rewrite_block)
+
+        for i in range(rewrite_block_num + 1, self.block_count) :
+            empty_block = Block()
+            self.__set_block(i, empty_block)
 
         self.block_count = rewrite_block_num + 1
         self.record_count -= rows_effected
@@ -249,7 +250,7 @@ class TableFileManager:
 
         for i in range(self.block_count) :
             empty_block = Block()
-            self.set_buffer(self.table_name, i, empty_block)
+            self.__set_block(i, empty_block)
 
         self.block_count = 1
         self.record_count = 0
@@ -359,7 +360,7 @@ class TableFileManager:
         :return: None
         :raises ValueError: If the header is invalid.
         """
-        block = Block.read_block(self.file_path, 0)
+        block = self.__get_block(0)
 
         magic = block.read(4)
         if magic != b"HEAD":
@@ -382,6 +383,17 @@ class TableFileManager:
         sentinel = block.read(1)
         if sentinel != b"\xCC":
             raise ValueError("Invalid table file: missing sentinel.")
+        
+    def __get_block(self, block_number) -> Block :
+        block = self.get_buffer(self.table_name, block_number)
+        if block is None:
+            block = Block.read_block(self.file_path, block_number)
+            self.set_buffer(self.table_name, block_number, block)
+        return block
+
+    def __set_block(self, block_number, block: Block) -> None :
+        self.set_buffer(self.table_name, block_number, block)
+        block.write_block(self.file_path, block_number)
 
     def __update_header(self) -> None:
         """
@@ -389,7 +401,8 @@ class TableFileManager:
 
         :return: None
         """
-        block = Block.read_block(self.file_path, 0)
+        block = self.__get_block(0)
         block.data[8:12] = self.record_count.to_bytes(4, "little")
         block.data[12:14] = self.block_count.to_bytes(2, "little")
         block.write_block(self.file_path, 0)
+        self.__set_block(0, block)

@@ -492,6 +492,8 @@ class StorageManager:
         table_names = self.get_table_data("information_schema")
         for table_name in table_names:
             table_name = table_name[0]
+            if (table_name[0] == "'" and table_name[-1] == "'") :
+                table_name = table_name[1:-1]
             self.tables[table_name] = TableFileManager(table_name)
 
     def __add_table_to_information_schema(self, table_name: str) -> None:

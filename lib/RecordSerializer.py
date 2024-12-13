@@ -89,6 +89,8 @@ class DtypeEncoder:
         :return: The encoded string as bytes.
         :raises ValueError: If the string length exceeds max_size.
         """
+        if (char[0] == '\'' and char[-1] == '\'') :
+            char = char[1:-1]
         encoded = char.encode('utf-8')
         length = len(encoded)
         if length > max_size:
@@ -106,6 +108,7 @@ class DtypeEncoder:
         """
         length, new_offset = self.decodeInt(byte_data, offset, 2, signed=False)
         value = byte_data[new_offset:new_offset + length].decode('utf-8')
+        value = f"'{value}'"
         return value, new_offset + length
 
     def __float_to_int(self, num: float) -> int:
