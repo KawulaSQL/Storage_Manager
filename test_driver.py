@@ -41,36 +41,167 @@ class TestDriver:
         except ValueError as e :
             print(e)
 
+    # def parse_select(self, statement: str) -> None:
+    #     """Parse SELECT * FROM table_name statement and print the result."""
+    #     match = re.search(r"SELECT\s+(.*?)\s+FROM\s+(\w+)(?:\s+WHERE\s+(.*))?", statement, re.IGNORECASE)
+    #     if not match:
+    #         print("Error: Invalid SELECT statement.")
+    #         return
+
+    #     column_selected = match.group(1)
+    #     table_name = match.group(2)
+    #     try:
+    #         where_clause = match.group(3)
+    #     except:
+    #         where_clause = None 
+
+    #     try:
+    #         if where_clause:
+    #             comparison_operators = ['<=', '>=', '!=', '==', '=', '<', '>']
+                
+    #             for op in comparison_operators:
+    #                 if op in where_clause:
+    #                     parts = where_clause.split(op)
+                        
+    #                     operand1 = parts[0].strip()
+    #                     operand2 = parts[1].strip()
+
+    #                     condition = Condition(operand1, op, operand2)
+                        
+    #                     table_data = self.storage_manager.get_table_data(table_name, condition)
+    #                     break
+    #         else: 
+    #             table_data = self.storage_manager.get_table_data(table_name)
+
+    #         if (len(table_data) == 0) :
+    #             print("No Record found")
+    #             return
+
+    #         schema = self.storage_manager.get_table_schema(table_name)
+    #         all_columns = [attr[0] for attr in schema.get_metadata()]
+            
+    #         if column_selected.strip() == "*":
+    #             column_names = all_columns
+    #         else:
+    #             column_names = [col.strip() for col in column_selected.split(",")]
+    #             if not set(column_names).issubset(all_columns):
+    #                 print(f"Error: Some specified columns do not exist in table '{table_name}'.")
+    #                 return
+
+    #         column_widths = [len(name) for name in column_names]
+    #         for row in table_data:
+    #             filtered_row = [row[all_columns.index(col)] for col in column_names]
+    #             column_widths = [max(width, len(str(value))) for width, value in zip(column_widths, filtered_row)]
+
+    #         row_format = " | ".join(f"{{:<{width}}}" for width in column_widths)
+    #         separator = "-+-".join("-" * width for width in column_widths)
+
+    #         print(row_format.format(*column_names))
+    #         print(separator)
+    #         for row in table_data:
+    #             filtered_row = [row[all_columns.index(col)] for col in column_names]
+    #             print(row_format.format(*filtered_row))
+            
+    #         # print(self.storage_manager.get_stats()) # testing purposes
+    #     except ValueError as e:
+    #         print(e)
+
     def parse_select(self, statement: str) -> None:
-        """Parse SELECT * FROM table_name statement and print the result."""
-        match = re.search(r"SELECT\s+(.*?)\s+FROM\s+(\w+)(?:\s+WHERE\s+(.*))?", statement, re.IGNORECASE)
-        if not match:
+        """
+        Parse SELECT statement supporting:
+        1. Single table SELECT 
+        2. Multiple JOIN ON syntax
+        3. Optional WHERE condition as global condition
+        Format: 
+        SELECT columns FROM table1 [JOIN table2 ON table1.attr = table2.attr]+ [WHERE condition]
+        """
+        # Regex to match SELECT statement with optional multiple JOINs and optional WHERE
+        select_match = re.match(
+            r"SELECT\s+(.*?)\s+FROM\s+(\w+)(?:\s+JOIN\s+(\w+)\s+ON\s+(\w+\.\w+)\s*=\s*(\w+\.\w+))*(?:\s+WHERE\s+(.*))?", 
+            statement, 
+            re.IGNORECASE
+        )
+        
+        if not select_match:
             print("Error: Invalid SELECT statement.")
             return
 
-        column_selected = match.group(1)
-        table_name = match.group(2)
-        try:
-            where_clause = match.group(3).split(" ")
-        except:
-            where_clause = None
+        column_selected = select_match.group(1)
+        tables = [select_match.group(2)]  # First table
+        join_attributes = []
+        where_clause = select_match.group(6)
+
+        # Extract additional joins if present
+        join_pattern = re.compile(r"JOIN\s+(\w+)\s+ON\s+(\w+\.\w+)\s*=\s*(\w+\.\w+)")
+        joins = join_pattern.findall(statement)
+        
+        for join in joins:
+            tables.append(join[0])  # Add table name
+            join_attributes.append((join[1], join[2]))  # Add join attributes
 
         try:
+            # Prepare table conditions (all None)
+            table_conditions = [None] * len(tables)
+            global_condition = None
+
+            # Parse WHERE clause
             if where_clause:
-                table_data = self.storage_manager.get_table_data(table_name, Condition(where_clause[0], where_clause[1], where_clause[2]))
-            else: 
-                table_data = self.storage_manager.get_table_data(table_name)
-            schema = self.storage_manager.get_table_schema(table_name)
-            all_columns = [attr[0] for attr in schema.get_metadata()]
+                comparison_operators = ['<=', '>=', '!=', '==', '=', '<', '>']
+                
+                # Parse global condition
+                global_condition_match = re.findall(r"\w+\.\w+\s*(?:<=|>=|!=|==|=|<|>)\s*\S+", where_clause)
+                
+                # Parse global condition (if exists)
+                if global_condition_match:
+                    global_condition_str = global_condition_match[0]
+                    for op in comparison_operators:
+                        if op in global_condition_str:
+                            parts = global_condition_str.split(op)
+                            operand1 = parts[0].strip()
+                            operand2 = parts[1].strip()
+                            global_condition = Condition(operand1, op, operand2)
+                            break
+
+            # Perform table query (single table or joined)
+            if len(tables) == 1:
+                # Single table query
+                table_data = self.storage_manager.get_table_data(tables[0])
+                
+                # Apply global condition if exists
+                if global_condition:
+                    table_data = [
+                        row for row in table_data 
+                        if self._evaluate_condition(global_condition, row, tables[0])
+                    ]
+            else:
+                # Joined table query
+                table_data = self.storage_manager.get_joined_table(
+                    table_names=tables, 
+                    join_attributes=join_attributes, 
+                    table_conditions=table_conditions, 
+                    global_condition=global_condition
+                )
+
+            if len(table_data) == 0:
+                print("No Record found")
+                return
+
+            # Prepare column selection
+            all_columns = []
+            for table in tables:
+                schema = self.storage_manager.get_table_schema(table)
+                table_columns = [f"{table}.{attr[0]}" for attr in schema.get_metadata()]
+                all_columns.extend(table_columns)
             
             if column_selected.strip() == "*":
                 column_names = all_columns
             else:
                 column_names = [col.strip() for col in column_selected.split(",")]
                 if not set(column_names).issubset(all_columns):
-                    print(f"Error: Some specified columns do not exist in table '{table_name}'.")
+                    print(f"Error: Some specified columns do not exist in tables {tables}.")
                     return
 
+            # Display results
             column_widths = [len(name) for name in column_names]
             for row in table_data:
                 filtered_row = [row[all_columns.index(col)] for col in column_names]
@@ -85,10 +216,8 @@ class TestDriver:
                 filtered_row = [row[all_columns.index(col)] for col in column_names]
                 print(row_format.format(*filtered_row))
             
-            print(self.storage_manager.get_stats()) # testing purposes
         except ValueError as e:
             print(e)
-
 
     def parse_insert(self, statement: str) -> None:
         """Parse INSERT INTO table_name VALUES (...) statement and insert data."""
@@ -143,15 +272,15 @@ class TestDriver:
 
     def parse_update(self, statement: str) -> None:
         """Parse UPDATE table_name SET column1=value1, column2=value2 WHERE condition statement."""
-        update_match = re.search(r"UPDATE\s+(\w+)\s+SET\s+(.+?)\s+WHERE\s+(.+)", statement, re.IGNORECASE)
-        
-        if not update_match:
-            print("Error: Invalid UPDATE statement.")
-            return
+        update_match = re.search(r"UPDATE\s+(\w+)\s+SET\s+(.+)(?:\s+WHERE\s+(.+))?", statement, re.IGNORECASE)
 
         table_name = update_match.group(1)
         set_clause = update_match.group(2)
-        where_clause = update_match.group(3)
+
+        try:
+            where_clause = update_match.group(3)
+        except:
+            where_clause = None 
 
         update_values = {}
         for assignment in set_clause.split(','):
@@ -163,20 +292,29 @@ class TestDriver:
             
             column = col_match.group(1)
             value = col_match.group(2).strip()
-            update_values[column] = self._parse_value(value)
-
-        where_parts = where_clause.split()
-        if len(where_parts) != 3:
-            print("Error: Invalid WHERE clause.")
-            return
+            update_values[column] = value
 
         try:
-            condition = Condition(where_parts[0], where_parts[1], where_parts[2])
-            
-            rows_affected = self.storage_manager.update_table(table_name, condition, update_values)
+            if where_clause:
+                comparison_operators = ['<=', '>=', '!=', '==', '=', '<', '>']
+                
+                for op in comparison_operators:
+                    if op in where_clause:
+                        parts = where_clause.split(op)
+                        
+                        operand1 = parts[0].strip()
+                        operand2 = parts[1].strip()
+
+                        condition = Condition(operand1, op, operand2)
+                        
+                        rows_affected = self.storage_manager.update_table(table_name, update_values, condition)
+                        break
+            else: 
+                rows_affected = self.storage_manager.update_table(table_name, update_values)
             print(f"{rows_affected} row(s) updated in '{table_name}'.")
-        except ValueError as e:
-            print(f"Error: {e}")
+        except ValueError as e :
+            print(e)
+
 
     def _parse_value(self, value: str):
         """Helper method to parse and convert values."""
@@ -201,20 +339,31 @@ class TestDriver:
             return
 
         table_name = delete_match.group(1)
-        where_clause = delete_match.group(2)
-
-        where_parts = where_clause.split()
-        if len(where_parts) != 3:
-            print("Error: Invalid WHERE clause.")
-            return
+        try:
+            where_clause = delete_match.group(2)
+        except:
+            where_clause = None 
 
         try:
-            condition = Condition(where_parts[0], where_parts[1], where_parts[2])
-            
-            rows_affected = self.storage_manager.delete_table_record(table_name, condition)
+            if where_clause:
+                comparison_operators = ['<=', '>=', '!=', '==', '=', '<', '>']
+                
+                for op in comparison_operators:
+                    if op in where_clause:
+                        parts = where_clause.split(op)
+                        
+                        operand1 = parts[0].strip()
+                        operand2 = parts[1].strip()
+
+                        condition = Condition(operand1, op, operand2)
+                        
+                        rows_affected = self.storage_manager.delete_table_record(table_name, condition)
+                        break
+            else: 
+                rows_affected = self.storage_manager.delete_table_record(table_name)
             print(f"{rows_affected} row(s) deleted from '{table_name}'.")
         except ValueError as e:
-            print(f"Error: {e}")
+            print(e)
 
     def run(self) -> None:
         """Run the CLI driver."""

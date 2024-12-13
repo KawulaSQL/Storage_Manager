@@ -6,7 +6,7 @@ from .RecordSerializer import RecordSerializer
 from .Block import Block, BLOCK_SIZE
 from .Schema import Schema
 from .Condition import Condition
-
+from .Expression import ExpressionParser
 
 sys.path.append("./Failure_Recovery")
 from Failure_Recovery.FailureRecoveryManager import FailureRecoveryManager
@@ -127,12 +127,10 @@ class TableFileManager:
 
         return records
 
-    def delete_record(self, col_1_index: int, col_2: int | dict[str, Any], condition: Condition) -> int:
+    def delete_record(self, condition: Condition) -> int:
         """
         Delete records that match the specified condition within the existing blocks.
 
-        :param col_1_index: Index of the first column to check in the condition
-        :param col_2: Index of the second column or a dictionary with value and type
         :param condition: Condition to evaluate for deleting records
         :return: Number of rows deleted
         """
@@ -145,6 +143,8 @@ class TableFileManager:
         first_block = Block.read_block(self.file_path, 0)
         header_length = int.from_bytes(first_block.data[4:8], byteorder='little')
         rewrite_block.add_record(first_block.data[0:header_length])
+
+        attributes = [attr[0] for attr in self.schema.get_metadata()]
 
         while current_block < self.block_count:
             block = Block.read_block(self.file_path, current_block)
@@ -167,13 +167,14 @@ class TableFileManager:
 
                 record = self.serializer.deserialize(record_bytes)
 
-                should_delete = False
-                if condition.operand2["isAttribute"]:
-                    if condition.evaluate(record[col_1_index], record[col_2]):
-                        should_delete = True
-                else:
-                    if condition.evaluate(record[col_1_index], col_2['value']):
-                        should_delete = True
+                context = {}
+                for attr, value in zip(attributes, record):
+                    context[attr] = value
+
+                try:
+                    should_delete = condition.evaluate(context)
+                except ValueError as e:
+                    raise ValueError(f"Error evaluating condition: {e}")
 
                 if rewrite_block_num == -1 and should_delete:
                     rewrite_block_num = current_block
@@ -200,6 +201,7 @@ class TableFileManager:
 
         if rewrite_block.header["record_count"] > 0:
             rewrite_block.write_block(self.file_path, rewrite_block_num)
+            self.set_buffer(self.table_name, rewrite_block_num, rewrite_block)
 
         self.block_count = rewrite_block_num + 1
         self.record_count -= rows_effected
@@ -208,52 +210,46 @@ class TableFileManager:
 
         return rows_effected
 
-    def update_record(self, col_1_index: int, col_2: int | dict[str, Any], condition: Condition,
-                      update_values: dict[str, Any]) -> int:
+    def update_record(self, update_values: dict[str, Any], condition: Condition | None = None) -> int:
         """
         Update records that match the specified condition.
 
-        :param col_1_index: Index of the first column to check in the condition
-        :param col_2: Index of the second column or a dictionary with value and type
-        :param condition: Condition to evaluate for updating records
         :param update_values: Dictionary of column names and their new values to update
+        :param condition: Condition to evaluate for updating records
         :return: Number of rows affected by the update operation
         """
 
+        parser = ExpressionParser()
+
         records = self.read_table()
         rows_affected = 0
+        attributes = [attr[0] for attr in self.schema.get_metadata()]
 
         updated_records = []
 
         for record in records:
             record_list = list(record)
 
-            if condition.operand2["isAttribute"]:
-                if condition.evaluate(record[col_1_index], record[col_2]):
-                    for col_name, new_value in update_values.items():
-                        col_index = next(
-                            (i for i, attr in enumerate(self.schema.attributes)
-                             if attr.name == col_name),
-                            None
-                        )
-                        if col_index is not None:
-                            record_list[col_index] = new_value
+            context = {}
+            for attr, value in zip(attributes, record):
+                context[attr] = value
 
-                    rows_affected += 1
-            else:
-                if condition.evaluate(record[col_1_index], col_2['value']):
-                    for col_name, new_value in update_values.items():
-                        col_index = next(
-                            (i for i, attr in enumerate(self.schema.attributes)
-                             if attr.name == col_name),
-                            None
-                        )
-                        if col_index is not None:
-                            record_list[col_index] = new_value
-
-                    rows_affected += 1
+            if not condition or condition.evaluate(context) :
+                for col_name, new_value in update_values.items():
+                    col_index = next(
+                        (i for i, attr in enumerate(self.schema.attributes)
+                            if attr.name == col_name),
+                        None
+                    )
+                    if col_index is not None:
+                        record_list[col_index] = parser.evaluate(new_value, context)
+                rows_affected += 1
 
             updated_records.append(tuple(record_list))
+
+        for i in range(self.block_count) :
+            empty_block = Block()
+            self.set_buffer(self.table_name, i, empty_block)
 
         self.block_count = 1
         self.record_count = 0
@@ -354,6 +350,7 @@ class TableFileManager:
         block = Block()
         block.add_record(header)
         block.write_block(self.file_path, 0)
+        self.set_buffer(self.table_name, 0, block)
 
     def __read_header(self) -> None:
         """
@@ -368,7 +365,7 @@ class TableFileManager:
         if magic != b"HEAD":
             raise ValueError("Invalid table file: missing header.")
 
-        # header_length = int.from_bytes(block.read(4), byteorder='little')
+        header_length = int.from_bytes(block.read(4), byteorder='little')
 
         self.record_count = int.from_bytes(block.read(4), byteorder='little')
         self.block_count = int.from_bytes(block.read(2), byteorder='little')

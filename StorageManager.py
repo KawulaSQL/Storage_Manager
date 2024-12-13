@@ -53,7 +53,7 @@ class StorageManager:
         self.__add_table_to_information_schema(table_name)
 
     def get_table_data(self, table_name: str, condition: Condition | None = None,
-                       projection=None) -> List[Tuple[Any, ...]]:
+                    projection=None) -> List[Tuple[Any, ...]]:
         """
         Retrieves all records from a specified table.
 
@@ -72,61 +72,18 @@ class StorageManager:
         types = [col[1] for col in self.get_table_schema(table_name).get_metadata()]
 
         if condition and table_name != "information_schema":
-            try:
-                if condition.operand1["isAttribute"]:
-                    col_1 = attributes.index(condition.operand1["value"])
-                    condition.operand1["type"] = types[col_1]
-                else:
-                    col_1 = condition.operand1["value"]
-
-                if condition.operand2["isAttribute"]:
-                    col_2 = attributes.index(condition.operand2["value"])
-                    condition.operand1["type"] = types[col_2]
-                else:
-                    col_2 = condition.operand2["value"]
-
-            except Exception:
-                raise ValueError("There's an error in the column input")
-
-            # print(condition.operand1, condition.operand2) # testing purposes
-
-            if condition.operand1["type"] != condition.operand2["type"] and condition.operand1["type"] not in ["int",
-                                                                                                               "float"] and \
-                    condition.operand2["type"] not in ["int", "float"]:
-                raise ValueError(f"TypeError: {condition.operand1['type']} with {condition.operand2['type']}")
-
             temp_rec = []
-            if condition.operand1["isAttribute"]:
-                if condition.operand2["isAttribute"]:
-                    for i in range(len(records)):
-                        if condition.evaluate(records[i][col_1], records[i][col_2]):
-                            temp_rec.append(records[i])
+            for record in records:
+                context = {}
+                for attr, value in zip(attributes, record):
+                    context[attr] = value
 
-                else:  # col 2 is not a reference to an attribute
-                    is_indexed = self.get_index(table_name, condition.operand1["value"], condition.operand2["value"],
-                                                condition.operand2["type"])
-                    print("is_indexed = ", is_indexed)
-                    if is_indexed is None:
-                        for i in range(len(records)):
-                            if condition.evaluate(records[i][col_1], col_2):
-                                temp_rec.append(records[i])
-                    else:
-                        temp_rec = is_indexed
-            else:  # col 1 is not a reference to an attribute
-                if condition.operand2["isAttribute"]:
-                    is_indexed = self.get_index(table_name, condition.operand2["value"], condition.operand1["value"],
-                                                condition.operand1["type"])
-                    print("is_indexed = ", is_indexed)
-                    if is_indexed is None:
-                        for i in range(len(records)):
-                            if condition.evaluate(col_1, records[i][col_2]):
-                                temp_rec.append(records[i])
-                    else:
-                        temp_rec = is_indexed
-                else:  # col 2 is not a reference to an attribute
-                    for i in range(len(records)):
-                        if condition.evaluate(col_1, col_2):
-                            temp_rec.append(records[i])
+                try:
+                    if condition.evaluate(context):
+                        temp_rec.append(record)
+                except ValueError as e:
+                    raise ValueError(f"Error evaluating condition: {e}")
+
             records = temp_rec
 
         if len(projection) > 0 and table_name != "information_schema":
@@ -135,14 +92,95 @@ class StorageManager:
                     raise ValueError(f"The column {att} is not in {table_name}")
 
             filtered_records = []
-            for i in range(len(records)):
+            for record in records:
                 record_holder = []
                 for att in projection:
-                    record_holder.append(records[i][attributes.index(att)])
+                    record_holder.append(record[attributes.index(att)])
                 filtered_records.append(tuple(record_holder))
             records = filtered_records
 
         return records
+    
+    def get_joined_table(self, table_names: List[str], join_attributes: List[Tuple[str, str]], table_conditions: List[Condition], global_condition: Condition | None):
+        """
+        Retrieves records from multiple tables joined on attribute. Join ordering is based on the order of the tables in table_names
+
+        :param table_names: Name of the tables to be joined.
+        :param join_attributes: List of joined attributes written with the syntax ('table_name.attribute_name', 'table2_name.attribute_name')
+        :param table_conditions: Where clause of the initial data fetched from each table
+        :param global_condition: Where clause involving attributes from multiple table
+        :return: A list of tuples containing the joined table records
+        """
+
+        if len(table_names) < 2:
+            raise ValueError("At least two tables are required for join operation")
+        
+        if len(table_names) != len(table_conditions):
+            raise ValueError("Number of table conditions must be equal number of table")
+        
+        if len(join_attributes) != len(table_names) - 1:
+            raise ValueError("Number of join attributes must be one less than number of tables")
+
+        table_records = []
+        table_schemas = []
+        for i, table_name in enumerate(table_names):
+            condition = table_conditions[i-1] if i > 0 else None
+            records = self.get_table_data(table_name, condition)
+            
+            schema = self.get_table_schema(table_name).get_metadata()
+            attributes = [col[0] for col in schema]
+            
+            table_records.append(records)
+            table_schemas.append((table_name, attributes))
+
+        result_records = []
+        
+        def parse_table_attribute(table_attr: str) -> Tuple[str, str]:
+            """Parse table.attribute format"""
+            parts = table_attr.split('.')
+            if len(parts) != 2:
+                raise ValueError(f"Invalid attribute format: {table_attr}")
+            return parts[0], parts[1]
+
+        result_records = table_records[0]
+
+        for i in range(1, len(table_names)):
+            table1_name, table1_attr = parse_table_attribute(join_attributes[i-1][0])
+            table2_name, table2_attr = parse_table_attribute(join_attributes[i-1][1])
+
+            table1_idx = next(j for j, (name, attrs) in enumerate(table_schemas) if name == table1_name)
+            table2_idx = next(j for j, (name, attrs) in enumerate(table_schemas) if name == table2_name)
+
+            table1_attr_idx = table_schemas[table1_idx][1].index(table1_attr)
+            table2_attr_idx = table_schemas[table2_idx][1].index(table2_attr)
+
+            new_result_records = []
+            for r1 in result_records:
+                for r2 in table_records[table2_idx]:
+                    if r1[table1_attr_idx] == r2[table2_attr_idx]:
+                        new_result_records.append(r1 + r2)
+
+            result_records = new_result_records
+
+        if global_condition:
+            filtered_records = []
+            for record in result_records:
+                context = {}
+                current_idx = 0
+                for j, (table_name, attributes) in enumerate(table_schemas):
+                    for attr in attributes:
+                        context[f"{table_name}.{attr}"] = record[current_idx]
+                        current_idx += 1
+
+                try:
+                    if global_condition.evaluate(context):
+                        filtered_records.append(record)
+                except ValueError as e:
+                    raise ValueError(f"Error evaluating global condition: {e}")
+
+            result_records = filtered_records
+
+        return result_records
 
     def insert_into_table(self, table_name: str, values: List[Tuple[Any, ...]]) -> int:
         """
@@ -182,7 +220,7 @@ class StorageManager:
         except FileNotFoundError:
             raise ValueError(f"Table {table_name} not found.")
 
-    def delete_table_record(self, table_name: str, condition: Condition) -> int:
+    def delete_table_record(self, table_name: str, condition: Condition | None = None) -> int:
         """
         Deletes records from a table based on a condition.
 
@@ -192,52 +230,13 @@ class StorageManager:
         """
         if table_name not in self.tables:
             raise ValueError(f"Table {table_name} not found.")
+        
+        return self.tables[table_name].delete_record(condition)
 
-        col_names = [col[0] for col in self.get_table_schema(table_name).get_metadata()]
-
-        if condition.operand1["isAttribute"]:
-            if condition.operand1["value"] not in col_names:
-                raise ValueError(f"Column {condition.operand1['value']} not found.")
-            col_1 = col_names.index(condition.operand1["value"])
-
-            if condition.operand2["isAttribute"]:
-                if condition.operand2["value"] not in col_names:
-                    raise ValueError(f"Column {condition.operand2['value']} not found.")
-                col_2 = col_names.index(condition.operand1["value"])
-            else:
-                col_2 = condition.operand2
-
-            return self.tables[table_name].delete_record(col_1, col_2, condition)
-
-        else:
-            raise ValueError(f"Column {condition.operand1['value']} not found.")
-
-    def update_table(self, table_name: str, condition: Condition, update_values: dict) -> int:
+    def update_table(self, table_name: str, update_values: dict, condition: Condition | None = None) -> int:
         """Update records in a table based on a condition."""
         table_file_manager = self.tables[table_name]
-
-        schema = table_file_manager.schema
-        col_1_index = next(
-            (i for i, attr in enumerate(schema.attributes)
-             if attr.name == condition.operand1['value']),
-            None
-        )
-
-        if col_1_index is None:
-            raise ValueError(f"Column {condition.operand1['value']} not found in table")
-
-        if condition.operand2['isAttribute']:
-            col_2 = next(
-                (i for i, attr in enumerate(schema.attributes)
-                 if attr.name == condition.operand2['value']),
-                None
-            )
-            if col_2 is None:
-                raise ValueError(f"Column {condition.operand2['value']} not found in table")
-        else:
-            col_2 = condition.operand2
-
-        return table_file_manager.update_record(col_1_index, col_2, condition, update_values)
+        return table_file_manager.update_record(update_values, condition)
 
     def get_table_schema(self, table_name) -> Schema:
         """
