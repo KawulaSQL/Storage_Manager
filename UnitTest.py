@@ -267,9 +267,9 @@ class TestStorageManager(unittest.TestCase):
         print(index_file_path)
         self.assertTrue(os.path.isfile(index_file_path), "Hash index file was not created.")
         # Retrieve records with 'name' = 'Alice' using the index
-        result = self.storage_manager.get_index(table_name, "name", "Alice", "varchar")
+        result = self.storage_manager.get_index(table_name, "name", "'Alice'", "varchar")
         # Expected records with 'name' = 'Alice'
-        expected = [(1, 'Alice'), (3, 'Alice')]
+        expected = [(1,"'Alice'"), (3, "'Alice'")]
         self.assertEqual(result, expected, "get_index did not return the expected records.")
 
 class ColoredTextTestResult(unittest.TextTestResult):
