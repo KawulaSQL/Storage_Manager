@@ -115,7 +115,6 @@ class TestDriver:
         Format: 
         SELECT columns FROM table1 [JOIN table2 ON table1.attr = table2.attr]+ [WHERE condition]
         """
-        # Regex to match SELECT statement with optional multiple JOINs and optional WHERE
         select_match = re.match(
             r"SELECT\s+(.*?)\s+FROM\s+(\w+)(?:\s+JOIN\s+(\w+)\s+ON\s+(\w+\.\w+)\s*=\s*(\w+\.\w+))*(?:\s+WHERE\s+(.*))?", 
             statement, 
@@ -127,24 +126,21 @@ class TestDriver:
             return
 
         column_selected = select_match.group(1)
-        tables = [select_match.group(2)]  # First table
+        tables = [select_match.group(2)]
         join_attributes = []
         where_clause = select_match.group(6)
 
-        # Extract additional joins if present
         join_pattern = re.compile(r"JOIN\s+(\w+)\s+ON\s+(\w+\.\w+)\s*=\s*(\w+\.\w+)")
         joins = join_pattern.findall(statement)
         
         for join in joins:
-            tables.append(join[0])  # Add table name
-            join_attributes.append((join[1], join[2]))  # Add join attributes
+            tables.append(join[0])
+            join_attributes.append((join[1], join[2]))
 
         try:
-            # Prepare table conditions (all None)
             table_conditions = [None] * len(tables)
             global_condition = None
 
-            # Parse WHERE clause
             if where_clause:
                 comparison_operators = ['<=', '>=', '!=', '==', '=', '<', '>']
                 
@@ -156,19 +152,10 @@ class TestDriver:
                         global_condition = Condition(operand1, op, operand2)
                         break
 
-            # Perform table query (single table or joined)
             if len(tables) == 1:
-                # Single table query
-                table_data = self.storage_manager.get_table_data(tables[0])
+                table_data = self.storage_manager.get_table_data(tables[0], global_condition)
                 
-                # Apply global condition if exists
-                if global_condition:
-                    table_data = [
-                        row for row in table_data 
-                        if self._evaluate_condition(global_condition, row, tables[0])
-                    ]
             else:
-                # Joined table query
                 table_data = self.storage_manager.get_joined_table(
                     table_names=tables, 
                     join_attributes=join_attributes, 
@@ -180,7 +167,6 @@ class TestDriver:
                 print("No Record found")
                 return
 
-            # Prepare column selection
             all_columns = []
             for table in tables:
                 schema = self.storage_manager.get_table_schema(table)
@@ -195,7 +181,6 @@ class TestDriver:
                     print(f"Error: Some specified columns do not exist in tables {tables}.")
                     return
 
-            # Display results
             column_widths = [len(name) for name in column_names]
             for row in table_data:
                 filtered_row = [row[all_columns.index(col)] for col in column_names]
