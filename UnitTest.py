@@ -72,7 +72,7 @@ class TestStorageManager(unittest.TestCase):
 
         # check if the table is created
         tables = self.storage_manager.list_tables()
-        self.assertIn(table_name, tables)
+        self.assertIn("'" + table_name + "'", tables)
 
         # check if the file is created in the storage
         table_file = os.path.join(self.TEST_BASE_PATH, f"{table_name}_table.bin")
@@ -96,7 +96,8 @@ class TestStorageManager(unittest.TestCase):
         self.storage_manager.insert_into_table(table_name, data)
 
         retrieved_data = self.storage_manager.get_table_data(table_name)
-        self.assertEqual(data, retrieved_data)
+        modified_data = list(map(lambda x : (x[0], "'" + x[1] + "'"), data))
+        self.assertEqual(modified_data, retrieved_data)
 
     def test_get_table_schema(self):
         """
@@ -145,7 +146,7 @@ class TestStorageManager(unittest.TestCase):
         data = [(1, "Alice"), (2, "Bob"), (3, "Alice")]
         self.storage_manager.insert_into_table(table_name, data)
 
-        stats = json.loads(self.storage_manager.get_stats())
+        stats = self.storage_manager.get_stats()
 
         self.assertIn(table_name, stats)
         self.assertEqual(stats[table_name]["n_r"], 3)  # Number of records
@@ -171,7 +172,7 @@ class TestStorageManager(unittest.TestCase):
         # Verify the table exists
         tables = self.storage_manager.list_tables()
         self.assertIn(
-            table_name, tables, f"Table {table_name} should exist before deletion."
+            "'" + table_name + "'", tables, f"Table {table_name} should exist before deletion."
         )
 
         self.storage_manager.delete_table(table_name)
@@ -186,7 +187,7 @@ class TestStorageManager(unittest.TestCase):
         # check instance
         tables = self.storage_manager.list_tables()
         self.assertNotIn(
-            table_name, tables, f"Table {table_name} should have been deleted."
+            "'" + table_name + "'", tables, f"Table {table_name} should have been deleted."
         )
 
         # Verify the table data is no longer accessible
@@ -204,26 +205,26 @@ class TestStorageManager(unittest.TestCase):
         # Verify the table exists
         tables = self.storage_manager.list_tables()
         self.assertIn(
-            table_name, tables, f"Table {table_name} should exist before deletion."
+            "'" + table_name + "'", tables, f"Table {table_name} should exist before deletion."
         )
 
         # insert records
         self.storage_manager.insert_into_table(table_name, [(1, "Agus", 20), (2, "Bagas", 21), (3, "Ciko", 21), (4, "Dito", 21), (5, "Eko", 19)])
 
         # check if insert correct
-        self.assertEqual(self.storage_manager.get_table_data(table_name), [(1, "Agus", 20), (2, "Bagas", 21), (3, "Ciko", 21), (4, "Dito", 21), (5, "Eko", 19)])
+        self.assertEqual(self.storage_manager.get_table_data(table_name), [(1, "'Agus'", 20), (2, "'Bagas'", 21), (3, "'Ciko'", 21), (4, "'Dito'", 21), (5, "'Eko'", 19)])
 
         # delete records
         self.storage_manager.delete_table_record(table_name, Condition("id", "=", "3"))
 
         # check records
-        self.assertEqual(self.storage_manager.get_table_data(table_name), [(1, "Agus", 20), (2, "Bagas", 21), (4, "Dito", 21), (5, "Eko", 19)])
+        self.assertEqual(self.storage_manager.get_table_data(table_name), [(1, "'Agus'", 20), (2, "'Bagas'", 21), (4, "'Dito'", 21), (5, "'Eko'", 19)])
 
         # delete records
         self.storage_manager.delete_table_record(table_name, Condition("age", ">=", "20"))
 
         # check records
-        self.assertEqual(self.storage_manager.get_table_data(table_name), [(5, "Eko", 19)])
+        self.assertEqual(self.storage_manager.get_table_data(table_name), [(5, "'Eko'", 19)])
 
     def test_update_records(self):
         """
@@ -236,17 +237,18 @@ class TestStorageManager(unittest.TestCase):
         # Verify the table exists
         tables = self.storage_manager.list_tables()
         self.assertIn(
-            table_name, tables, f"Table {table_name} should exist before deletion."
+            "'" + table_name + "'", tables, f"Table {table_name} should exist before deletion."
         )
 
         # insert records
         self.storage_manager.insert_into_table(table_name, [(1, "Agus", 20), (2, "Bagas", 21), (3, "Ciko", 21), (4, "Dito", 21), (5, "Eko", 19)])
 
         # check if insert correct
-        self.assertEqual(self.storage_manager.get_table_data(table_name), [(1, "Agus", 20), (2, "Bagas", 21), (3, "Ciko", 21), (4, "Dito", 21), (5, "Eko", 19)])
+        self.assertEqual(self.storage_manager.get_table_data(table_name), [(1, "'Agus'", 20), (2, "'Bagas'", 21), (3, "'Ciko'", 21), (4, "'Dito'", 21), (5, "'Eko'", 19)])
 
         # update records
-        self.storage_manager.update_table_record(table_name, Condition("id", "=", "4"))
+        self.storage_manager.update_table(table_name, {"age" : "age ^ (5 - 3) - 100"} , Condition("id", "=", "4"))
+        self.assertEqual(self.storage_manager.get_table_data(table_name), [(1, "'Agus'", 20), (2, "'Bagas'", 21), (3, "'Ciko'", 21), (4, "'Dito'", 341), (5, "'Eko'", 19)])
 
     def test_set_and_get_index(self):
         """

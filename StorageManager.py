@@ -217,6 +217,8 @@ class StorageManager:
         """
         if table_name not in self.tables:
             raise ValueError(f"Table {table_name} not found.")
+        
+        self.delete_index(table_name)
 
         # remove table from information_schema
         self.delete_table_record(
@@ -233,8 +235,7 @@ class StorageManager:
             print("Table deleted successfully.")
         except FileNotFoundError:
             raise ValueError(f"Table {table_name} not found.")
-        
-        self.delete_index(table_name)
+    
 
     def delete_table_record(self, table_name: str, condition: Condition | None = None) -> int:
         """
