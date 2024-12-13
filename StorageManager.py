@@ -101,7 +101,7 @@ class StorageManager:
 
         return records
     
-    def get_joined_table(self, table_names: List[str], join_attributes: List[Tuple[str, str]], table_conditions: List[Condition], global_condition: Condition | None):
+    def get_joined_table(self, table_names: List[str], join_attributes: List[Tuple[str, str]], table_conditions: List[Condition], global_condition: Condition | None, projection: List[str] = None):
         """
         Retrieves records from multiple tables joined on attribute. Join ordering is based on the order of the tables in table_names
 
@@ -109,6 +109,7 @@ class StorageManager:
         :param join_attributes: List of joined attributes written with the syntax ('table_name.attribute_name', 'table2_name.attribute_name')
         :param table_conditions: Where clause of the initial data fetched from each table
         :param global_condition: Where clause involving attributes from multiple table
+        :param projection: Selected columns
         :return: A list of tuples containing the joined table records
         """
 
@@ -143,15 +144,25 @@ class StorageManager:
             return parts[0], parts[1]
 
         result_records = table_records[0]
+        table1_name, table1_attr = parse_table_attribute(join_attributes[0][0])
+        result_records = table_records[table_names.index(table1_name)]
+        table1_idx = next(j for j, (name, attrs) in enumerate(table_schemas) if name == table1_name)
+        result_attr = list(map(lambda x : f"{table1_name}.{x}", table_schemas[table1_idx][1]))
+
+        processed_tables = {table1_name}
 
         for i in range(1, len(table_names)):
             table1_name, table1_attr = parse_table_attribute(join_attributes[i-1][0])
             table2_name, table2_attr = parse_table_attribute(join_attributes[i-1][1])
 
-            table1_idx = next(j for j, (name, attrs) in enumerate(table_schemas) if name == table1_name)
+            if (table2_name in processed_tables) :
+                table1_name, table1_attr, table2_name, table2_attr = table2_name, table2_attr, table1_name, table1_attr
+            elif (table1_name not in processed_tables) :
+                raise ValueError("Bad Join Order")
+
             table2_idx = next(j for j, (name, attrs) in enumerate(table_schemas) if name == table2_name)
 
-            table1_attr_idx = table_schemas[table1_idx][1].index(table1_attr)
+            table1_attr_idx = result_attr.index(f"{table1_name}.{table1_attr}")
             table2_attr_idx = table_schemas[table2_idx][1].index(table2_attr)
 
             new_result_records = []
@@ -161,16 +172,15 @@ class StorageManager:
                         new_result_records.append(r1 + r2)
 
             result_records = new_result_records
+            result_attr += list(map(lambda x : f"{table2_name}.{x}", table_schemas[table2_idx][1]))
+            processed_tables.add(table2_name)
 
         if global_condition:
             filtered_records = []
             for record in result_records:
                 context = {}
-                current_idx = 0
-                for j, (table_name, attributes) in enumerate(table_schemas):
-                    for attr in attributes:
-                        context[f"{table_name}.{attr}"] = record[current_idx]
-                        current_idx += 1
+                for j, attr in enumerate(result_attr):
+                    context[attr] = record[j]
 
                 try:
                     if global_condition.evaluate(context):
@@ -180,7 +190,10 @@ class StorageManager:
 
             result_records = filtered_records
 
-        return result_records
+        if projection :
+            result_records = list(filter(lambda x : x in projection, result_records))
+
+        return (result_records, projection if projection else result_attr)
 
     def insert_into_table(self, table_name: str, values: List[Tuple[Any, ...]]) -> int:
         """

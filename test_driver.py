@@ -90,8 +90,7 @@ class TestDriver:
 
             column_widths = [len(name) for name in column_names]
             for row in table_data:
-                filtered_row = [row[all_columns.index(col)] for col in column_names]
-                column_widths = [max(width, len(str(value))) for width, value in zip(column_widths, filtered_row)]
+                column_widths = [max(width, len(str(value))) for width, value in zip(column_widths, row)]
 
             row_format = " | ".join(f"{{:<{width}}}" for width in column_widths)
             separator = "-+-".join("-" * width for width in column_widths)
@@ -99,8 +98,7 @@ class TestDriver:
             print(row_format.format(*column_names))
             print(separator)
             for row in table_data:
-                filtered_row = [row[all_columns.index(col)] for col in column_names]
-                print(row_format.format(*filtered_row))
+                print(row_format.format(*row))
             
             # print(self.storage_manager.get_stats()) # testing purposes
         except ValueError as e:
@@ -130,13 +128,19 @@ class TestDriver:
             return
 
         column_selected = select_match.group(1)
+
+        if column_selected.strip() == "*":
+            column_names = None
+        else:
+            column_names = [col.strip() for col in column_selected.split(",")]
+
         tables = [select_match.group(2)]
         join_attributes = []
         where_clause = select_match.group(6)
 
         join_pattern = re.compile(r"JOIN\s+(\w+)\s+ON\s+(\w+\.\w+)\s*=\s*(\w+\.\w+)")
         joins = join_pattern.findall(statement)
-        
+
         for join in joins:
             tables.append(join[0])
             join_attributes.append((join[1], join[2]))
@@ -156,39 +160,20 @@ class TestDriver:
                         global_condition = Condition(operand1, op, operand2)
                         break
 
-            if len(tables) == 1:
-                table_data = self.storage_manager.get_table_data(tables[0], global_condition)
-                
-            else:
-                table_data = self.storage_manager.get_joined_table(
-                    table_names=tables, 
-                    join_attributes=join_attributes, 
-                    table_conditions=table_conditions, 
-                    global_condition=global_condition
-                )
+            table_data, column_names = self.storage_manager.get_joined_table(
+                table_names=tables, 
+                join_attributes=join_attributes, 
+                table_conditions=table_conditions, 
+                global_condition=global_condition
+            )
 
             if len(table_data) == 0:
                 print("No Record found")
                 return
 
-            all_columns = []
-            for table in tables:
-                schema = self.storage_manager.get_table_schema(table)
-                table_columns = [f"{table}.{attr[0]}" for attr in schema.get_metadata()]
-                all_columns.extend(table_columns)
-            
-            if column_selected.strip() == "*":
-                column_names = all_columns
-            else:
-                column_names = [col.strip() for col in column_selected.split(",")]
-                if not set(column_names).issubset(all_columns):
-                    print(f"Error: Some specified columns do not exist in tables {tables}.")
-                    return
-
             column_widths = [len(name) for name in column_names]
             for row in table_data:
-                filtered_row = [row[all_columns.index(col)] for col in column_names]
-                column_widths = [max(width, len(str(value))) for width, value in zip(column_widths, filtered_row)]
+                column_widths = [max(width, len(str(value))) for width, value in zip(column_widths, row)]
 
             row_format = " | ".join(f"{{:<{width}}}" for width in column_widths)
             separator = "-+-".join("-" * width for width in column_widths)
@@ -196,8 +181,7 @@ class TestDriver:
             print(row_format.format(*column_names))
             print(separator)
             for row in table_data:
-                filtered_row = [row[all_columns.index(col)] for col in column_names]
-                print(row_format.format(*filtered_row))
+                print(row_format.format(*row))
             
         except ValueError as e:
             print(e)
