@@ -255,15 +255,11 @@ class TestDriver:
 
     def parse_update(self, statement: str) -> None:
         """Parse UPDATE table_name SET column1=value1, column2=value2 WHERE condition statement."""
-        update_match = re.search(r"UPDATE\s+(\w+)\s+SET\s+(.+)(?:\s+WHERE\s+(.+))?", statement, re.IGNORECASE)
+        update_match = re.search(r"UPDATE\s+(\w+)\s+SET\s+(.+?)(?:\s+WHERE\s+(.+))?$", statement, re.IGNORECASE)
 
         table_name = update_match.group(1)
         set_clause = update_match.group(2)
-
-        try:
-            where_clause = update_match.group(3)
-        except:
-            where_clause = None 
+        where_clause = update_match.group(3)
 
         update_values = {}
         for assignment in set_clause.split(','):
