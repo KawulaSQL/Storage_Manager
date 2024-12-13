@@ -1,3 +1,4 @@
 /storage/*
 !/storage/README.md
 __pycache__/
+wal.log
