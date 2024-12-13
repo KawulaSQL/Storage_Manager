@@ -278,7 +278,6 @@ class TestDriver:
         except ValueError as e :
             print(e)
 
-
     def _parse_value(self, value: str):
         """Helper method to parse and convert values."""
         if (value.startswith("'") and value.endswith("'")) or \
@@ -328,6 +327,22 @@ class TestDriver:
         except ValueError as e:
             print(e)
 
+    def parse_drop(self, statement: str) -> None:
+        """Parse DROP TABLE table_name statement and delete the table."""
+        drop_match = re.search(r"DROP TABLE\s+(\w+)", statement, re.IGNORECASE)
+
+        if not drop_match:
+            print("Error: Invalid DROP TABLE statement.")
+            return
+
+        table_name = drop_match.group(1)
+
+        try:
+            self.storage_manager.delete_table(table_name)
+            print(f"Table '{table_name}' deleted successfully.")
+        except ValueError as e:
+            print(e)
+
     def run(self) -> None:
         """Run the CLI driver."""
         while True:
@@ -354,6 +369,9 @@ class TestDriver:
 
             elif statement.lower().startswith("delete from"):
                 self.parse_delete(statement)
+            
+            elif statement.lower().startswith("drop table"):
+                self.parse_drop(statement)
 
             else:
                 print("Error: Unsupported KWL statement.")
