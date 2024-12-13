@@ -206,6 +206,7 @@ class StorageManager:
             raise ValueError(f"{table_name} not in database")
         self.tables[table_name].write_table(values)
 
+        self.update_index(table_name)
         return len(values)
 
     def delete_table(self, table_name: str) -> None:
@@ -232,6 +233,8 @@ class StorageManager:
             print("Table deleted successfully.")
         except FileNotFoundError:
             raise ValueError(f"Table {table_name} not found.")
+        
+        self.delete_index(table_name)
 
     def delete_table_record(self, table_name: str, condition: Condition | None = None) -> int:
         """
@@ -244,7 +247,9 @@ class StorageManager:
         if table_name not in self.tables:
             raise ValueError(f"Table {table_name} not found.")
         
-        return self.tables[table_name].delete_record(condition)
+        returned = self.tables[table_name].delete_record(condition)
+        self.update_index(table_name)
+        return returned
 
     def update_table(self, table_name: str, update_values: dict, condition: Condition | None = None) -> int:
         """Update records in a table based on a condition."""
@@ -309,6 +314,18 @@ class StorageManager:
             file_path = os.path.join("./storage", f"{table_name}-{metadata[i][0]}-hash.pickle")
             if os.path.isfile(file_path):
                 self.set_index(table_name, metadata[i][0], "hash")
+
+    def delete_index(self, table_name: str) -> None:
+        if table_name not in self.tables:
+            raise ValueError(f"{table_name} not in database")
+
+        schema = self.get_table_schema(table_name)
+        metadata = schema.get_metadata()
+
+        for i in range(len(metadata)):
+            file_path = os.path.join("./storage", f"{table_name}-{metadata[i][0]}-hash.pickle")
+            if os.path.isfile(file_path):
+                os.remove(file_path)
 
     def set_index(self, table_name: str, column: str, index_type: str) -> None:
         """

@@ -248,6 +248,27 @@ class TestStorageManager(unittest.TestCase):
         # update records
         self.storage_manager.update_table_record(table_name, Condition("id", "=", "4"))
 
+    def test_set_and_get_index(self):
+        """
+        Test creating a hash index on a table column and retrieving records using the index.
+        """
+        table_name = self.generate_unique_table_name("test_table")
+        schema = Schema([Attribute("id", "int", 4), Attribute("name", "varchar", 50)])
+        self.storage_manager.create_table(table_name, schema)
+        # Insert data into the table
+        data = [(1, "Alice"), (2, "Bob"), (3, "Alice")]
+        self.storage_manager.insert_into_table(table_name, data)
+        # Create a hash index on the 'name' column
+        self.storage_manager.set_index(table_name, "name", "hash")
+        # Check if the index file was created
+        index_file_path = os.path.join("./storage", f"{table_name}-name-hash.pickle")
+        print(index_file_path)
+        self.assertTrue(os.path.isfile(index_file_path), "Hash index file was not created.")
+        # Retrieve records with 'name' = 'Alice' using the index
+        result = self.storage_manager.get_index(table_name, "name", "Alice", "varchar")
+        # Expected records with 'name' = 'Alice'
+        expected = [(1, 'Alice'), (3, 'Alice')]
+        self.assertEqual(result, expected, "get_index did not return the expected records.")
 
 class ColoredTextTestResult(unittest.TextTestResult):
     GREEN = "\033[92m"
