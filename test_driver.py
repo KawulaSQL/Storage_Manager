@@ -41,70 +41,70 @@ class TestDriver:
         except ValueError as e :
             print(e)
 
-    # def parse_select(self, statement: str) -> None:
-    #     """Parse SELECT * FROM table_name statement and print the result."""
-    #     match = re.search(r"SELECT\s+(.*?)\s+FROM\s+(\w+)(?:\s+WHERE\s+(.*))?", statement, re.IGNORECASE)
-    #     if not match:
-    #         print("Error: Invalid SELECT statement.")
-    #         return
+    def parse_select_no_join(self, statement: str) -> None:
+        """Parse SELECT * FROM table_name statement and print the result."""
+        match = re.search(r"SELECT\s+(.*?)\s+FROM\s+(\w+)(?:\s+WHERE\s+(.*))?", statement, re.IGNORECASE)
+        if not match:
+            print("Error: Invalid SELECT statement.")
+            return
 
-    #     column_selected = match.group(1)
-    #     table_name = match.group(2)
-    #     try:
-    #         where_clause = match.group(3)
-    #     except:
-    #         where_clause = None 
+        column_selected = match.group(1)
+        table_name = match.group(2)
+        try:
+            where_clause = match.group(3)
+        except:
+            where_clause = None 
 
-    #     try:
-    #         if where_clause:
-    #             comparison_operators = ['<=', '>=', '!=', '==', '=', '<', '>']
+        try:
+            if where_clause:
+                comparison_operators = ['<=', '>=', '!=', '==', '=', '<', '>']
                 
-    #             for op in comparison_operators:
-    #                 if op in where_clause:
-    #                     parts = where_clause.split(op)
+                for op in comparison_operators:
+                    if op in where_clause:
+                        parts = where_clause.split(op)
                         
-    #                     operand1 = parts[0].strip()
-    #                     operand2 = parts[1].strip()
+                        operand1 = parts[0].strip()
+                        operand2 = parts[1].strip()
 
-    #                     condition = Condition(operand1, op, operand2)
+                        condition = Condition(operand1, op, operand2)
                         
-    #                     table_data = self.storage_manager.get_table_data(table_name, condition)
-    #                     break
-    #         else: 
-    #             table_data = self.storage_manager.get_table_data(table_name)
+                        table_data = self.storage_manager.get_table_data(table_name, condition)
+                        break
+            else: 
+                table_data = self.storage_manager.get_table_data(table_name)
 
-    #         if (len(table_data) == 0) :
-    #             print("No Record found")
-    #             return
+            if (len(table_data) == 0) :
+                print("No Record found")
+                return
 
-    #         schema = self.storage_manager.get_table_schema(table_name)
-    #         all_columns = [attr[0] for attr in schema.get_metadata()]
+            schema = self.storage_manager.get_table_schema(table_name)
+            all_columns = [attr[0] for attr in schema.get_metadata()]
             
-    #         if column_selected.strip() == "*":
-    #             column_names = all_columns
-    #         else:
-    #             column_names = [col.strip() for col in column_selected.split(",")]
-    #             if not set(column_names).issubset(all_columns):
-    #                 print(f"Error: Some specified columns do not exist in table '{table_name}'.")
-    #                 return
+            if column_selected.strip() == "*":
+                column_names = all_columns
+            else:
+                column_names = [col.strip() for col in column_selected.split(",")]
+                if not set(column_names).issubset(all_columns):
+                    print(f"Error: Some specified columns do not exist in table '{table_name}'.")
+                    return
 
-    #         column_widths = [len(name) for name in column_names]
-    #         for row in table_data:
-    #             filtered_row = [row[all_columns.index(col)] for col in column_names]
-    #             column_widths = [max(width, len(str(value))) for width, value in zip(column_widths, filtered_row)]
+            column_widths = [len(name) for name in column_names]
+            for row in table_data:
+                filtered_row = [row[all_columns.index(col)] for col in column_names]
+                column_widths = [max(width, len(str(value))) for width, value in zip(column_widths, filtered_row)]
 
-    #         row_format = " | ".join(f"{{:<{width}}}" for width in column_widths)
-    #         separator = "-+-".join("-" * width for width in column_widths)
+            row_format = " | ".join(f"{{:<{width}}}" for width in column_widths)
+            separator = "-+-".join("-" * width for width in column_widths)
 
-    #         print(row_format.format(*column_names))
-    #         print(separator)
-    #         for row in table_data:
-    #             filtered_row = [row[all_columns.index(col)] for col in column_names]
-    #             print(row_format.format(*filtered_row))
+            print(row_format.format(*column_names))
+            print(separator)
+            for row in table_data:
+                filtered_row = [row[all_columns.index(col)] for col in column_names]
+                print(row_format.format(*filtered_row))
             
-    #         # print(self.storage_manager.get_stats()) # testing purposes
-    #     except ValueError as e:
-    #         print(e)
+            # print(self.storage_manager.get_stats()) # testing purposes
+        except ValueError as e:
+            print(e)
 
     def parse_select(self, statement: str) -> None:
         """
@@ -120,6 +120,10 @@ class TestDriver:
             statement, 
             re.IGNORECASE
         )
+
+        if ("join" not in statement.lower()) :
+            self.parse_select_no_join(statement)
+            return
         
         if not select_match:
             print("Error: Invalid SELECT statement.")
